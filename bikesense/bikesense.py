@@ -1,22 +1,33 @@
+#! /usr/bin/env micropython
+
 import time
 
 
 class ReadingResult():
    """
-   Return type of SensorInterface's and GPSModuleInterface's read() function
+   Return type of SensorInterface's read() function.
    """
 
    name: str
-   value: int
+   value: any
 
-   def __init__(self, name: str, value: str):
+   def __init__(self, name: str, value: any):
+      """
+      Initialize a ReadingResult instance.
+
+      Args:
+          name (str): measurement / sensor name
+          value (any): measurement value
+      """
       self.name = name
       self.value = value
 
 
 class SensorInterface:
    """
-   Interface class that defines the necessary functions for concrete sensors
+   Interface class that defines the necessary functions for concrete sensors.
+
+   Instantiate as many of these as needed for the concrete sensor types.
    """
 
    def init(self):
@@ -28,7 +39,9 @@ class SensorInterface:
 
 class GPSModuleInterface:
    """
-   Interface class that defines the necessary functions for concrete sensors
+   Interface class that defines the necessary functions for concrete sensors.
+   
+   A single GPS module must necessarily be implemented to instantiate the BikeSense Class.
    """
 
    def init(self):
@@ -39,6 +52,10 @@ class GPSModuleInterface:
 
 
 class BikeSense:
+   """
+   BikeSense core logic.
+   """
+
    gps: GPSModuleInterface
    sensors: list[SensorInterface] | None
 
@@ -51,10 +68,9 @@ class BikeSense:
          self.sensors = list()
       
       self.sensors.append(s)
-
       return self
 
-   def init(self):
+   def build(self):
       self.gps.init()
 
       if self.sensors:
