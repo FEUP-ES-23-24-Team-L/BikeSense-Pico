@@ -4,7 +4,7 @@ import random as rand
 from src.bikesense.bikesense import (
     SensorInterface,
     ReadingResult,
-    BikeSense,
+    BikeSenseBuilder,
 )
 from src.bikesense.gps import BksGPS
 
@@ -18,7 +18,7 @@ class DummySensorModule(SensorInterface):
 
 
 def main():
-    BikeSense(BksGPS()).registerSensor(DummySensorModule()).build().run()
-
+    bks = BikeSenseBuilder(BksGPS()).registerSensor(DummySensorModule())
+    bks.connectWifi("ArchBtw", "123arch321").build().run()
 
 main()

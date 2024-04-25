@@ -1,6 +1,9 @@
 #! /usr/bin/env micropython
 
-import time
+import utime
+import machine as m
+import network as nw
+import urequests as urq
 
 
 class ReadingResult:
@@ -51,23 +54,25 @@ class GPSModuleInterface:
         return ""
 
 
-class BikeSense:
-    """
-    BikeSense core logic.
-    """
-
+class BikeSenseBuilder:
+    wled: m.Pin
+    wlan: nw.WLAN
     gps: GPSModuleInterface
-    sensors: list[SensorInterface] | None
+    sensors: list[SensorInterface]
 
     def __init__(self, gps: GPSModuleInterface):
+        self.wlan = nw.WLAN(nw.STA_IF)
+        self.wled = m.Pin("LED", m.Pin.OUT)
         self.gps = gps
-        self.sensors = None
+        self.sensors = list()
 
     def registerSensor(self, s: SensorInterface):
-        if self.sensors is None:
-            self.sensors = list()
-
         self.sensors.append(s)
+        return self
+
+    def connectWifi(self, ssid: str, password: str):
+        self.wlan.active(True)
+        self.wlan.connect(ssid, password)
         return self
 
     def build(self):
@@ -77,17 +82,56 @@ class BikeSense:
             for sensor in self.sensors:
                 sensor.init()
 
-        return self
+        return BikeSense(self.wled, self.wlan, self.gps, self.sensors)
+
+
+class BikeSense:
+    """
+    BikeSense core logic.
+    """
+
+    wled: m.Pin
+    wlan: nw.WLAN
+    gps: GPSModuleInterface
+    sensors: list[SensorInterface]
+
+    def __init__(
+        self,
+        wled: m.Pin,
+        wlan: nw.WLAN,
+        gps: GPSModuleInterface,
+        sensors: list[SensorInterface],
+    ):
+        self.wled = wled
+        self.wlan = wlan
+        self.gps = gps
+        self.sensors = sensors
+
+    def _wifiIsConnected(self) -> bool:
+        if self.wlan.isconnected():
+            self.wled.on()
+            print(f"ip = {self.wlan.ifconfig()[0]}")
+            return True
+        else:
+            self.wled.off()
+            print(f"wifi status: {self.wlan.status()}")
+            return False
 
     def run(self, loop_delay_ms: int = 1000):
         while True:
-            time.sleep(loop_delay_ms / 1000)
+            #TODO: change sleep to timer based approach
+            #      Make http related stuff async
+            utime.sleep_ms(loop_delay_ms)
+
+            if self._wifiIsConnected():
+                try:
+                    r = urq.get("http://date.jsontest.com")
+                    print(f"get response: {r.json()}")
+                except Exception as e:
+                    print(f"Exception with get request: {e}")
 
             gps = self.gps.read()
             print(f"{gps}")
-
-            if self.sensors is None:
-                continue
 
             for s in self.sensors:
                 reading = s.read()

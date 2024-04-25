@@ -16,7 +16,7 @@ class BksGPS(GPSModuleInterface):
 
         if self.uart0.any() > 0:
             rxData = str(self.uart0.readline())[2:][:-5]
-            print(rxData)
+            # print(rxData)
             for x in rxData:
                 self.microGps.update(x)
 
