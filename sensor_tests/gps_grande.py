@@ -1,5 +1,7 @@
 from machine import UART, Pin
-from micropyGPS import MicropyGPS
+
+from src.thirdParty.micropyGPS import MicropyGPS
+
 import time
 
 uart0 = UART(0, baudrate=9600, tx=Pin(16), rx=Pin(17), timeout=2)
