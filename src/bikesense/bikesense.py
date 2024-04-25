@@ -50,8 +50,9 @@ class GPSModuleInterface:
     def init(self):
         pass
 
-    def read(self) -> str:
-        return ""
+    def read(self) -> ReadingResult:
+        return ReadingResult("", "")
+
 
 
 class BikeSenseBuilder:
