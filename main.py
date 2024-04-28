@@ -10,12 +10,60 @@ from src.bikesense.bikesense import (
 )
 
 
-class DummySensorModule(SensorInterface):
+class MockNoiseSensor(SensorInterface):
     def init(self):
-        print("Hello! I'm a dummy sensor!")
+        print("Hello! I'm a mock noise sensor!")
 
     def read(self) -> ReadingResult:
-        return ReadingResult("DummySensor", rand.randint(0, 100))
+        return ReadingResult("noise_level", rand.randint(0, 100))
+
+
+class MockTemperatureSensor(SensorInterface):
+    def init(self):
+        print("Hello! I'm a mock temperature sensor!")
+
+    def read(self) -> ReadingResult:
+        return ReadingResult("temperature", rand.randint(0, 100))
+
+
+class MockHumiditySensor(SensorInterface):
+    def init(self):
+        print("Hello! I'm a mock humidity sensor!")
+
+    def read(self) -> ReadingResult:
+        return ReadingResult("humidity", rand.randint(0, 100))
+
+
+class MockUVSensor(SensorInterface):
+    def init(self):
+        print("Hello! I'm a mock UV sensor!")
+
+    def read(self) -> ReadingResult:
+        return ReadingResult("uv_level", rand.randint(0, 100))
+
+
+class MockLuminositySensor(SensorInterface):
+    def init(self):
+        print("Hello! I'm a mock luminosity sensor!")
+
+    def read(self) -> ReadingResult:
+        return ReadingResult("luminosity", rand.randint(0, 100))
+
+
+class MockCarbonSensor(SensorInterface):
+    def init(self):
+        print("Hello! I'm a mock carbon sensor!")
+
+    def read(self) -> ReadingResult:
+        return ReadingResult("carbon_monoxide_level", rand.randint(0, 100))
+
+
+class MockPolutionSensor(SensorInterface):
+    def init(self):
+        print("Hello! I'm a mock polution sensor!")
+
+    def read(self) -> ReadingResult:
+        return ReadingResult("polution_particles_ppm", rand.randint(0, 100))
 
 
 class MockDataStorage(DataStorageInterface):
@@ -47,7 +95,13 @@ class MockDataStorage(DataStorageInterface):
 
 def main():
     bks = BikeSenseBuilder(BksGPS(), MockDataStorage())
-    bks.register_sensor(DummySensorModule())
+    bks.register_sensor(MockNoiseSensor())
+    bks.register_sensor(MockTemperatureSensor())
+    bks.register_sensor(MockHumiditySensor())
+    bks.register_sensor(MockUVSensor())
+    bks.register_sensor(MockLuminositySensor())
+    bks.register_sensor(MockCarbonSensor())
+    bks.register_sensor(MockPolutionSensor())
     bks.connect_wifi("ArchBtw", "123arch321").build().run()
 
 
