@@ -94,6 +94,13 @@ class MockDataStorage(DataStorageInterface):
 
 
 def main():
+
+    API_ENDPOINT = "http://192.168.1.251:8080"
+    API_TOKEN = ""
+
+    BIKE_ID = 1
+    UNIT_ID = 1
+
     bks = BikeSenseBuilder(BksGPS(), MockDataStorage())
     bks.register_sensor(MockNoiseSensor())
     bks.register_sensor(MockTemperatureSensor())
@@ -102,7 +109,9 @@ def main():
     bks.register_sensor(MockLuminositySensor())
     bks.register_sensor(MockCarbonSensor())
     bks.register_sensor(MockPolutionSensor())
-    bks.connect_wifi("ArchBtw", "123arch321").build().run()
+    bks.connect_wifi("TP-LINK_802D62", "30918320")
+    bks.set_ids(BIKE_ID, UNIT_ID).set_web_api(API_ENDPOINT, API_TOKEN)
+    bks.build().run()
 
 
 main()
