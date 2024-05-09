@@ -8,14 +8,16 @@
 class SensorInterface {
 public:
   virtual void setup() = 0;
-  virtual SensorReading read() = 0;
+  virtual SensorReading read() const = 0;
 };
+
+typedef std::optional<std::vector<SensorReading>> retrievedData;
 
 class DataStorageInterface {
 public:
   virtual void setup() = 0;
   virtual void store(const SensorReading &reading) = 0;
-  virtual std::vector<SensorReading> retrieve(int batchSize) = 0;
+  virtual retrievedData retrieve(int batchSize) = 0;
 };
 
 #endif

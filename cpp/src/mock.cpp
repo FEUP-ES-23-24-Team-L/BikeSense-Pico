@@ -1,11 +1,12 @@
 #include <Arduino.h>
 #include <mock.h>
+#include <optional>
 #include <sensorReading.h>
 
 void MockSensor::setup() { Serial.println("Mock sensor is setting up..."); }
 
-SensorReading MockSensor::read() {
-  return SensorReading("mock all-in-one sensor")
+SensorReading MockSensor::read() const {
+  return SensorReading()
       .addMeasurement("noise_level", 1)
       .addMeasurement("temperature", 2)
       .addMeasurement("humidity", 3)
@@ -17,8 +18,8 @@ SensorReading MockSensor::read() {
 
 void MockGps::setup() { Serial.println("Mock GPS is setting up..."); }
 
-SensorReading MockGps::read() {
-  return SensorReading("mock gps")
+SensorReading MockGps::read() const {
+  return SensorReading()
       .addMeasurement("latitude", 8)
       .addMeasurement("longitude", 9)
       .addMeasurement("altitude", 10)
@@ -46,7 +47,12 @@ void MockDataStorage::store(const SensorReading &reading) {
                 reading.toJsonString().c_str());
 }
 
-std::vector<SensorReading> MockDataStorage::retrieve(int batchSize) {
+retrievedData MockDataStorage::retrieve(int batchSize) {
+
+  if (readings_.size() == 0) {
+    return std::nullopt;
+  }
+
   std::vector<SensorReading> result;
   for (int i = 0; i < batchSize; i++) {
     if (readings_.size() > 0) {

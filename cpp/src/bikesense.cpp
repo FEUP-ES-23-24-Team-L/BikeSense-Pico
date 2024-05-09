@@ -1,10 +1,9 @@
+#include "interfaces.h"
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <bikesense.h>
 
 BikeSenseBuilder::BikeSenseBuilder() {
-  BIKE_ID = 0;
-  UNIT_ID = 0;
-
   sensors_ = std::vector<SensorInterface *>();
   gps_ = nullptr;
   dataStorage_ = nullptr;
@@ -26,41 +25,57 @@ BikeSenseBuilder::addDataStorage(DataStorageInterface *dataStorage) {
   return *this;
 }
 
-BikeSenseBuilder &BikeSenseBuilder::whoAmI(const int bikeId, const int unitId) {
-  BIKE_ID = bikeId;
-  UNIT_ID = unitId;
+BikeSenseBuilder &BikeSenseBuilder::whoAmI(const std::string bikeCode,
+                                           const std::string unitCode) {
+  bikeCode_ = bikeCode;
+  unitCode_ = unitCode;
   return *this;
 }
 
 BikeSenseBuilder &
-BikeSenseBuilder::withApiConfig(const std::string &apiToken,
+BikeSenseBuilder::withApiConfig(const std::string &apiAuthToken,
                                 const std::string &apiEndpoint) {
-  API_TOKEN = apiToken;
-  API_ENDPOINT = apiEndpoint;
+  apiAuthToken_ = apiAuthToken;
+  apiEndpoint_ = apiEndpoint;
   return *this;
 }
 
-BikeSenseBuilder &
-BikeSenseBuilder::withWifiConfig(const std::string &ssid,
-                                 const std::string &password) {
-  WIFI_SSID = ssid;
-  WIFI_PASSWORD = password;
+BikeSenseBuilder &BikeSenseBuilder::addNetwork(const std::string &ssid,
+                                               const std::string &password) {
+  this->networks_[ssid] = password;
   return *this;
 }
 
 BikeSense BikeSenseBuilder::build() {
-  return BikeSense(sensors_, gps_, dataStorage_, BIKE_ID, UNIT_ID, API_TOKEN,
-                   API_ENDPOINT, WIFI_SSID, WIFI_PASSWORD);
+  return BikeSense(sensors_, gps_, dataStorage_, networks_, bikeCode_,
+                   unitCode_, apiAuthToken_, apiEndpoint_);
 }
 
 BikeSense::BikeSense(std::vector<SensorInterface *> sensors,
                      SensorInterface *gps, DataStorageInterface *dataStorage,
-                     int bikeId, int unitId, const std::string &apiToken,
-                     const std::string &apiEndpoint, const std::string &ssid,
-                     const std::string &password)
-    : sensors_(sensors), gps_(gps), dataStorage_(dataStorage), BIKE_ID(bikeId),
-      UNIT_ID(unitId), API_TOKEN(apiToken), API_ENDPOINT(apiEndpoint),
-      WIFI_SSID(ssid), WIFI_PASSWORD(password) {}
+                     const StringMap &networks, const std::string &bikeCode,
+                     const std::string &unitCode,
+                     const std::string &apiAuthToken,
+                     const std::string &apiEndpoint, const WiFiMode_t wifi_mode,
+                     const int sensor_read_interval_ms,
+                     const int wifi_retry_interval_ms,
+                     const int http_timeout_ms, const int upload_batch_size)
+    : sensors_(sensors), gps_(gps), dataStorage_(dataStorage),
+      wifi_retry_timer_(0), SENSOR_READ_INTERVAL_MS(sensor_read_interval_ms),
+      WIFI_RETRY_INTERVAL_MS(wifi_retry_interval_ms),
+      HTTP_TIMEOUT_MS(http_timeout_ms), UPLOAD_BATCH_SIZE(upload_batch_size),
+      API_TOKEN(apiAuthToken), API_ENDPOINT(apiEndpoint), BIKE_CODE(bikeCode),
+      UNIT_CODE(unitCode) {
+
+  WiFi.mode(wifi_mode);
+  for (const auto &[ssid, password] : networks) {
+    multi_.addAP(ssid.c_str(), password.c_str());
+  }
+
+  http_.setReuse(true);
+  http_.setInsecure();
+  http_.setTimeout(HTTP_TIMEOUT_MS);
+}
 
 void BikeSense::setupSensors() {
   gps_->setup();
@@ -71,29 +86,138 @@ void BikeSense::setupSensors() {
   }
 }
 
-std::vector<SensorReading> BikeSense::readSensors() {
-  std::vector<SensorReading> readings;
+SensorReading BikeSense::readSensors() const {
+  SensorReading readings;
 
-  readings.push_back(gps_->read());
+  readings += (gps_->read());
   for (auto sensor : sensors_) {
-    readings.push_back(sensor->read());
+    readings += (sensor->read());
   }
 
   return readings;
+}
+
+inline bool BikeSense::checkWifi() { return multi_.run() == WL_CONNECTED; }
+
+int BikeSense::registerAndGetID(std::string payload, std::string endpoint) {
+
+  http_.begin((API_ENDPOINT + endpoint).c_str());
+  http_.addHeader("Content-Type", "application/json");
+  http_.addHeader("Authorization", API_TOKEN.c_str());
+
+  int httpCode = http_.POST(payload.c_str());
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_CREATED) {
+    Serial.printf("Failed to register parameter with error %d (%s)\n", httpCode,
+                  http_.errorToString(httpCode).c_str());
+    return -1;
+  }
+
+  const String &response = http_.getString();
+  Serial.printf("Response: %s\n", response.c_str());
+  JsonDocument doc;
+  deserializeJson(doc, response);
+  http_.end();
+
+  return doc["id"];
+}
+
+int BikeSense::registerTripAndGetID() {
+
+  if (!registered_) {
+    std::string bikeCodePayload = "{\"code\": \"" + BIKE_CODE + "\"}";
+    std::string unitCodePayload = "{\"code\": \"" + UNIT_CODE + "\"}";
+    bikeId_ = registerAndGetID(bikeCodePayload, "/bike/register");
+    unitId_ = registerAndGetID(unitCodePayload, "/sensor_unit/register");
+    if (bikeId_ == -1 || unitId_ == -1) {
+      return -1;
+    }
+    registered_ = true;
+  }
+
+  std::string tripPayload = "{\"bike_id\": " + std::to_string(bikeId_) +
+                            ", \"sensor_unit_id\": " + std::to_string(unitId_) +
+                            "}";
+
+  return registerAndGetID(tripPayload, "/trip/register");
+}
+
+int BikeSense::uploadData(const std::vector<SensorReading> &readings) {
+  std::string payload = SensorReading::toJsonArray(readings);
+  Serial.printf("Uploading %d readings:\n", readings.size());
+  Serial.println(payload.c_str());
+  int httpCode = http_.POST(payload.c_str());
+  return httpCode;
+}
+
+bool BikeSense::uploadAllSensorData() {
+  int tripId_ = registerTripAndGetID();
+  if (tripId_ == -1) {
+    Serial.println("Failed to register trip");
+    http_.end();
+    return false;
+  }
+
+  http_.begin((API_ENDPOINT + "/trip/upload_data").c_str());
+  http_.addHeader("Content-Type", "application/json");
+  http_.addHeader("Authorization", API_TOKEN.c_str());
+  http_.addHeader("Trip-ID", String(tripId_).c_str());
+
+  Serial.println("Uploading all sensor data...");
+
+  int sucessfullUploads = 0;
+  retrievedData data;
+  while (data = dataStorage_->retrieve(UPLOAD_BATCH_SIZE), data.has_value()) {
+    int httpCode = uploadData(data.value());
+    if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_CREATED) {
+      Serial.printf("HTTP post failed after %d batches with error %s\n",
+                    sucessfullUploads, http_.errorToString(httpCode).c_str());
+      for (auto reading : data.value()) {
+        dataStorage_->store(reading);
+      }
+      http_.end();
+      return false;
+    }
+    sucessfullUploads++;
+  }
+
+  http_.end();
+  return true;
 }
 
 void BikeSense::run() {
   // Setup the sensors
   this->setupSensors();
 
+  wifi_retry_timer_ = WIFI_RETRY_INTERVAL_MS;
+  sleep_ms(1000);
+
   while (true) {
     // Read the sensors
-    std::vector<SensorReading> readings = this->readSensors();
+    SensorReading readings = this->readSensors();
+    dataStorage_->store(readings);
 
-    // Store the readings
-    for (auto reading : readings)
-      dataStorage_->store(reading);
+    // Check the WiFi connection
+    if (wifi_retry_timer_ >= WIFI_RETRY_INTERVAL_MS) {
+      wifi_retry_timer_ = 0;
+      if (!checkWifi()) {
+        Serial.printf("WiFi is offline, retrying in %ds\n",
+                      WIFI_RETRY_INTERVAL_MS / 1000);
+        continue;
+      }
 
-    sleep_ms(1000);
+      Serial.printf("Connected to WiFi: %s\n", WiFi.SSID().c_str());
+
+      if (uploadAllSensorData()) {
+        Serial.println("Data uploaded successfully");
+        continue;
+      }
+
+      Serial.println("Failed to upload data");
+      // TODO: go into warning mode (e.g. LED blinking)
+      //       Block until the next retry
+      //       If all retries fail, go into error mode (e.g. LED blinking
+      //       faster)
+    }
+    sleep_ms(SENSOR_READ_INTERVAL_MS);
   }
 }

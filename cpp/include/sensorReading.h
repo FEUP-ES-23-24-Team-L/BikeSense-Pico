@@ -4,29 +4,33 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 class SensorReading {
 public:
   // Constructor to initialize with sensor type and measurements
-  SensorReading(const std::string &sensorType);
+  SensorReading();
+  SensorReading(std::unordered_map<std::string, double> measurements);
 
   SensorReading &addMeasurement(const std::string &measurementName,
                                 double value);
 
-  // Getter functions for sensor type and all measurements
-  const std::string &getSensorType() const;
+  // Getter functions all measurements
   const std::unordered_map<std::string, double> &getMeasurements() const;
 
   // Getter function for a specific measurement
   std::optional<double>
   getMeasurement(const std::string &measurementName) const;
 
-  // Function to convert the sensor reading to a string
-  std::string toString() const;
+  // Function to convert the sensor reading to JSON
   std::string toJsonString() const;
+  static std::string toJsonArray(const std::vector<SensorReading> &readings);
+
+  // Overloaded operators for merging sensor readings
+  SensorReading operator+(const SensorReading &other) const;
+  SensorReading &operator+=(const SensorReading &other);
 
 private:
-  std::string sensorType_;
   std::unordered_map<std::string, double> measurements_;
 };
 
