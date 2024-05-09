@@ -189,35 +189,48 @@ void BikeSense::run() {
   this->setupSensors();
 
   wifi_retry_timer_ = WIFI_RETRY_INTERVAL_MS;
-  sleep_ms(1000);
 
+  bool collectionMode = true;
+  bool dataUploaded = false;
+  bool errorMode = false;
+
+  // TODO: clean up the loop state machine
   while (true) {
     // Read the sensors
-    SensorReading readings = this->readSensors();
-    dataStorage_->store(readings);
+    if (collectionMode) {
+      SensorReading readings = this->readSensors();
+      dataStorage_->store(readings);
 
-    // Check the WiFi connection
-    if (wifi_retry_timer_ >= WIFI_RETRY_INTERVAL_MS) {
-      wifi_retry_timer_ = 0;
-      if (!checkWifi()) {
+      // Check the WiFi connection
+      if (wifi_retry_timer_ > WIFI_RETRY_INTERVAL_MS && checkWifi()) {
+        collectionMode = false;
+        Serial.printf("Connected to WiFi: %s\n", WiFi.SSID().c_str());
+      } else {
         Serial.printf("WiFi is offline, retrying in %ds\n",
                       WIFI_RETRY_INTERVAL_MS / 1000);
-        continue;
+      }
+    } else {
+      if (!dataUploaded) {
+        errorMode = !uploadAllSensorData();
+        dataUploaded = true;
+        if (!errorMode) {
+          Serial.println("Data uploaded successfully");
+        } else {
+          Serial.println("Failed to upload data");
+          // TODO: go into warning mode (e.g. LED blinking)
+          //       Block until the next retry
+          //       If all retries fail, go into error mode (e.g. LED blinking
+          //       faster)
+        }
       }
 
-      Serial.printf("Connected to WiFi: %s\n", WiFi.SSID().c_str());
-
-      if (uploadAllSensorData()) {
-        Serial.println("Data uploaded successfully");
-        continue;
+      if (!checkWifi()) {
+        collectionMode = true;
+        dataUploaded = false;
+        errorMode = false;
       }
-
-      Serial.println("Failed to upload data");
-      // TODO: go into warning mode (e.g. LED blinking)
-      //       Block until the next retry
-      //       If all retries fail, go into error mode (e.g. LED blinking
-      //       faster)
     }
+
     sleep_ms(SENSOR_READ_INTERVAL_MS);
   }
 }
