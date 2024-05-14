@@ -1,7 +1,5 @@
 #include "sensorReading.h"
 
-#include <sstream>
-
 SensorReading::SensorReading() {
   measurements_ = std::unordered_map<std::string, double>();
 }
@@ -31,41 +29,6 @@ SensorReading::getMeasurement(const std::string &measurementName) const {
     return it->second;
   }
   return std::nullopt;
-}
-
-std::string SensorReading::toJsonString() const {
-  std::stringstream ss;
-  ss << "{\n";
-  bool isFirst = true;
-  for (const auto &[measurementName, value] : measurements_) {
-    if (!isFirst) {
-      ss << ",\n";
-    }
-    isFirst = false;
-    ss << "\"" << measurementName << "\": " << value;
-  }
-  ss << "\n}";
-  return ss.str();
-}
-
-std::string
-SensorReading::toJsonArray(const std::vector<SensorReading> &readings) {
-  if (readings.empty()) {
-    return "[]"; // Empty array if no strings provided
-  }
-
-  std::stringstream result;
-
-  result << "[";
-  for (size_t i = 0; i < readings.size(); ++i) {
-    result << readings[i].toJsonString();
-    if (i != readings.size() - 1) {
-      result << ",";
-    }
-  }
-  result << "]";
-
-  return result.str();
 }
 
 SensorReading SensorReading::operator+(const SensorReading &other) const {

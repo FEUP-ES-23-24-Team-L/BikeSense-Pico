@@ -3,6 +3,7 @@
 #include <gps.h>
 #include <mock.h>
 #include <noise.h>
+#include <sdCard.h>
 
 #define SERIAL_BAUD 9600
 
@@ -41,7 +42,7 @@ void loop() {
       .addSensor(new MockSensor())
       .addSensor(new NoiseSensor())
       .addGps(new Gps())
-      .addDataStorage(new MockDataStorage())
+      .addDataStorage(new SDCard())
       .whoAmI(BIKE_CODE, UNIT_CODE)
       .withApiConfig(API_TOKEN, API_ENDPOINT)
       .addNetwork(STASSID_DEFAULT, STAPSK_DEFAULT)

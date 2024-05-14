@@ -81,7 +81,10 @@ BikeSense::BikeSense(std::vector<SensorInterface *> sensors, GpsInterface *gps,
 
 void BikeSense::setupSensors() {
   gps_->setup();
-  dataStorage_->setup();
+  if (!dataStorage_->setup()) {
+    Serial.println("Failed to setup data storage");
+    this->state_ = ERROR;
+  }
 
   for (auto sensor : sensors_) {
     sensor->setup();
@@ -161,7 +164,7 @@ int BikeSense::saveData(const SensorReading rd, const std::string timestamp) {
   JsonDocument doc;
   std::string json;
 
-  doc["timestamp"] = timestamp;
+  doc["timestamp"] = rp2040.getCycleCount64();
   for (auto meas : rd.getMeasurements()) {
     doc[meas.first] = meas.second;
   }
@@ -250,10 +253,12 @@ void BikeSense::run() {
 
     case UPLOADING_DATA: {
       Serial.printf("Connected to WiFi: %s\n", WiFi.SSID().c_str());
+
       int success = uploadAllSensorData();
       if (success) {
         Serial.println("All data uploaded successfully");
         this->state_ = IDLE;
+        this->dataStorage_->clear();
       } else {
         Serial.println("Error uploading data");
         this->state_ = ERROR;
@@ -271,3 +276,14 @@ void BikeSense::run() {
     sleep_ms(SENSOR_READ_INTERVAL_MS);
   }
 }
+
+// TODO: - Implement a log file to store error/log messages
+//       - Implement a logger class to handle log messages
+//       - Store relevant data in order to do automatic
+//         upload retries for failed uploads for a certain
+//         trip.
+//       - Dump data to backup storage in case of failed
+//         uploads and retry later (when in idle mode i.e.)
+//       - Implement a watchdog timer to reboot the device (?)
+//       - Brainstorm about improving trip start/end detection
+//       - Automatically dump log messages to Serial when available

@@ -4,7 +4,6 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 class SensorReading {
 private:
@@ -24,10 +23,6 @@ public:
   // Getter function for a specific measurement
   std::optional<double>
   getMeasurement(const std::string &measurementName) const;
-
-  // Function to convert the sensor reading to JSON
-  std::string toJsonString() const;
-  static std::string toJsonArray(const std::vector<SensorReading> &readings);
 
   // Overloaded operators for merging sensor readings
   SensorReading operator+(const SensorReading &other) const;

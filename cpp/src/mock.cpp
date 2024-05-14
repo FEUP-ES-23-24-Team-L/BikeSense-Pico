@@ -31,9 +31,10 @@ SensorReading MockGps::read() {
       .addMeasurement("pdop", 17);
 }
 
-void MockDataStorage::setup() {
+bool MockDataStorage::setup() {
   Serial.println("Mock data storage is setting up...");
   readings_ = std::vector<std::string>();
+  return true;
 }
 
 void MockDataStorage::store(const std::string reading) {

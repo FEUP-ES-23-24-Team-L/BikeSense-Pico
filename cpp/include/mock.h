@@ -23,7 +23,7 @@ private:
   std::vector<std::string> readings_;
 
 public:
-  void setup() override;
+  bool setup() override;
   void store(const std::string reading) override;
   retrievedData retrieve(int batchSize) override;
 };
