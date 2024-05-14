@@ -17,6 +17,11 @@ SensorReading &SensorReading::addMeasurement(const std::string &measurementName,
   return *this;
 }
 
+const std::unordered_map<std::string, double> &
+SensorReading::getMeasurements() const {
+  return this->measurements_;
+}
+
 std::optional<double>
 SensorReading::getMeasurement(const std::string &measurementName) const {
   // The find method returns an iterator to the element if it is found,

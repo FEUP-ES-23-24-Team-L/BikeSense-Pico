@@ -3,13 +3,10 @@
 
 #include <interfaces.h>
 
-#include <vector>
-
 class NoiseSensor : public SensorInterface {
 public:
   void setup() override;
-  SensorReading read() const override;
+  SensorReading read() override;
 };
-
 
 #endif

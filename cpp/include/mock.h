@@ -8,22 +8,23 @@
 class MockSensor : public SensorInterface {
 public:
   void setup() override;
-  SensorReading read() const override;
+  SensorReading read() override;
 };
 
-class MockGps : public SensorInterface {
+class MockGps : public GpsInterface {
 public:
   void setup() override;
-  SensorReading read() const override;
+  SensorReading read() override;
+  std::string timeString() override;
 };
 
 class MockDataStorage : public DataStorageInterface {
 private:
-  std::vector<SensorReading> readings_;
+  std::vector<std::string> readings_;
 
 public:
   void setup() override;
-  void store(const SensorReading &reading) override;
+  void store(const std::string reading) override;
   retrievedData retrieve(int batchSize) override;
 };
 

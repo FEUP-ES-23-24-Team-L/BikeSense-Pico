@@ -7,6 +7,9 @@
 #include <vector>
 
 class SensorReading {
+private:
+  std::unordered_map<std::string, double> measurements_;
+
 public:
   // Constructor to initialize with sensor type and measurements
   SensorReading();
@@ -29,9 +32,6 @@ public:
   // Overloaded operators for merging sensor readings
   SensorReading operator+(const SensorReading &other) const;
   SensorReading &operator+=(const SensorReading &other);
-
-private:
-  std::unordered_map<std::string, double> measurements_;
 };
 
 #endif

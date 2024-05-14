@@ -40,7 +40,7 @@ private:
   int unitId_ = -1;
 
   std::vector<SensorInterface *> sensors_;
-  SensorInterface *gps_;
+  GpsInterface *gps_;
   DataStorageInterface *dataStorage_;
 
   HTTPClient http_;
@@ -55,10 +55,11 @@ private:
   int registerTripAndGetID();
 
   bool uploadAllSensorData();
-  int uploadData(const std::vector<SensorReading> &readings);
+  int uploadData(const std::vector<std::string> &readings);
+  int saveData(const SensorReading rd, const std::string timestamp);
 
 public:
-  BikeSense(std::vector<SensorInterface *> sensors, SensorInterface *gps,
+  BikeSense(std::vector<SensorInterface *> sensors, GpsInterface *gps,
             DataStorageInterface *dataStorage, const StringMap &networks,
             const std::string &bikeCode, const std::string &unitCode,
             const std::string &apiAuthToken, const std::string &apiEndpoint,
@@ -79,7 +80,7 @@ private:
   std::string apiEndpoint_;
 
   std::vector<SensorInterface *> sensors_;
-  SensorInterface *gps_;
+  GpsInterface *gps_;
   DataStorageInterface *dataStorage_;
   StringMap networks_;
 
@@ -88,7 +89,7 @@ public:
   BikeSenseBuilder &whoAmI(const std::string bikeCode,
                            const std::string unitCode);
 
-  BikeSenseBuilder &addGps(SensorInterface *gps);
+  BikeSenseBuilder &addGps(GpsInterface *gps);
   BikeSenseBuilder &addSensor(SensorInterface *sensor);
   BikeSenseBuilder &addDataStorage(DataStorageInterface *dataStorage);
 

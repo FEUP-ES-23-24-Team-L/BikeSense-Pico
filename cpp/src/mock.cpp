@@ -5,7 +5,7 @@
 
 void MockSensor::setup() { Serial.println("Mock sensor is setting up..."); }
 
-SensorReading MockSensor::read() const {
+SensorReading MockSensor::read() {
   return SensorReading()
       .addMeasurement("temperature", 2)
       .addMeasurement("humidity", 3)
@@ -17,7 +17,7 @@ SensorReading MockSensor::read() const {
 
 void MockGps::setup() { Serial.println("Mock GPS is setting up..."); }
 
-SensorReading MockGps::read() const {
+SensorReading MockGps::read() {
   return SensorReading()
       .addMeasurement("latitude", 8)
       .addMeasurement("longitude", 9)
@@ -33,17 +33,16 @@ SensorReading MockGps::read() const {
 
 void MockDataStorage::setup() {
   Serial.println("Mock data storage is setting up...");
-  readings_ = std::vector<SensorReading>();
+  readings_ = std::vector<std::string>();
 }
 
-void MockDataStorage::store(const SensorReading &reading) {
-
+void MockDataStorage::store(const std::string reading) {
   if (readings_.size() > 10) {
     readings_.erase(readings_.begin());
   }
   readings_.push_back(reading);
-  Serial.printf("Mock data storage stored reading: %s\n",
-                reading.toJsonString().c_str());
+  /* Serial.printf("Mock data storage stored reading: %s\n", reading.c_str());
+   */
 }
 
 retrievedData MockDataStorage::retrieve(int batchSize) {
@@ -52,7 +51,7 @@ retrievedData MockDataStorage::retrieve(int batchSize) {
     return std::nullopt;
   }
 
-  std::vector<SensorReading> result;
+  std::vector<std::string> result;
   for (int i = 0; i < batchSize; i++) {
     if (readings_.size() > 0) {
       result.push_back(readings_.back());

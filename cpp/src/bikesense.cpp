@@ -1,8 +1,9 @@
+#include "bikesense.h"
 #include "elapsedMillis.h"
 #include "interfaces.h"
+
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <bikesense.h>
 
 BikeSenseBuilder::BikeSenseBuilder() {
   sensors_ = std::vector<SensorInterface *>();
@@ -15,7 +16,7 @@ BikeSenseBuilder &BikeSenseBuilder::addSensor(SensorInterface *sensor) {
   return *this;
 }
 
-BikeSenseBuilder &BikeSenseBuilder::addGps(SensorInterface *gps) {
+BikeSenseBuilder &BikeSenseBuilder::addGps(GpsInterface *gps) {
   gps_ = gps;
   return *this;
 }
@@ -52,8 +53,8 @@ BikeSense BikeSenseBuilder::build() {
                    unitCode_, apiAuthToken_, apiEndpoint_);
 }
 
-BikeSense::BikeSense(std::vector<SensorInterface *> sensors,
-                     SensorInterface *gps, DataStorageInterface *dataStorage,
+BikeSense::BikeSense(std::vector<SensorInterface *> sensors, GpsInterface *gps,
+                     DataStorageInterface *dataStorage,
                      const StringMap &networks, const std::string &bikeCode,
                      const std::string &unitCode,
                      const std::string &apiAuthToken,
@@ -142,12 +143,32 @@ int BikeSense::registerTripAndGetID() {
   return registerAndGetID(tripPayload, "/trip/register");
 }
 
-int BikeSense::uploadData(const std::vector<SensorReading> &readings) {
-  std::string payload = SensorReading::toJsonArray(readings);
+int BikeSense::uploadData(const std::vector<std::string> &readings) {
+  JsonDocument doc;
+  std::string payload;
+
   Serial.printf("Uploading %d readings:\n", readings.size());
+  for (size_t i = 0; i < readings.size(); i++) {
+    doc[i] = readings[i];
+  }
+  serializeJson(doc, payload);
   Serial.println(payload.c_str());
-  int httpCode = http_.POST(payload.c_str());
-  return httpCode;
+
+  return http_.POST(payload.c_str());
+}
+
+int BikeSense::saveData(const SensorReading rd, const std::string timestamp) {
+  JsonDocument doc;
+  std::string json;
+
+  doc["timestamp"] = timestamp;
+  for (auto meas : rd.getMeasurements()) {
+    doc[meas.first] = meas.second;
+  }
+  serializeJson(doc, json);
+  this->dataStorage_->store(json);
+
+  return 0;
 }
 
 bool BikeSense::uploadAllSensorData() {
@@ -203,7 +224,7 @@ void BikeSense::run() {
 
     case COLLECTING_DATA: {
       SensorReading readings = this->readSensors();
-      dataStorage_->store(readings);
+      this->saveData(readings, this->gps_->timeString());
 
       if (wifi_retry_timer_ < WIFI_RETRY_INTERVAL_MS) {
         break;

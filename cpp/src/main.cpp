@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <bikesense.h>
+#include <gps.h>
 #include <mock.h>
 #include <noise.h>
 
@@ -39,7 +40,7 @@ void loop() {
   BikeSenseBuilder()
       .addSensor(new MockSensor())
       .addSensor(new NoiseSensor())
-      .addGps(new MockGps())
+      .addGps(new Gps())
       .addDataStorage(new MockDataStorage())
       .whoAmI(BIKE_CODE, UNIT_CODE)
       .withApiConfig(API_TOKEN, API_ENDPOINT)
