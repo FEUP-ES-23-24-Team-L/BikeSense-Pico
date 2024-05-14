@@ -1,3 +1,4 @@
+#include "elapsedMillis.h"
 #include "interfaces.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -61,7 +62,7 @@ BikeSense::BikeSense(std::vector<SensorInterface *> sensors,
                      const int wifi_retry_interval_ms,
                      const int http_timeout_ms, const int upload_batch_size)
     : sensors_(sensors), gps_(gps), dataStorage_(dataStorage),
-      wifi_retry_timer_(0), SENSOR_READ_INTERVAL_MS(sensor_read_interval_ms),
+      SENSOR_READ_INTERVAL_MS(sensor_read_interval_ms),
       WIFI_RETRY_INTERVAL_MS(wifi_retry_interval_ms),
       HTTP_TIMEOUT_MS(http_timeout_ms), UPLOAD_BATCH_SIZE(upload_batch_size),
       API_TOKEN(apiAuthToken), API_ENDPOINT(apiEndpoint), BIKE_CODE(bikeCode),
@@ -185,56 +186,60 @@ bool BikeSense::uploadAllSensorData() {
 }
 
 void BikeSense::run() {
-  // Setup the sensors
   this->setupSensors();
 
-  wifi_retry_timer_ = WIFI_RETRY_INTERVAL_MS;
-
-  bool collectionMode = true;
-  bool dataUploaded = false;
-  bool errorMode = false;
+  elapsedMillis wifi_retry_timer_ = WIFI_RETRY_INTERVAL_MS;
 
   // TODO: clean up the loop state machine
   while (true) {
-    // Read the sensors
-    if (collectionMode) {
+    switch (this->state_) {
+
+    case IDLE: {
+      Serial.println("Checking for known wifi connections");
+      if (!this->checkWifi()) {
+        this->state_ = COLLECTING_DATA;
+      }
+    } break;
+
+    case COLLECTING_DATA: {
       SensorReading readings = this->readSensors();
       dataStorage_->store(readings);
 
-      // Check the WiFi connection
-      if (wifi_retry_timer_ > WIFI_RETRY_INTERVAL_MS) {
-        if (this->checkWifi()) {
-          collectionMode = false;
-          Serial.printf("Connected to WiFi: %s\n", WiFi.SSID().c_str());
-        }
+      if (wifi_retry_timer_ < WIFI_RETRY_INTERVAL_MS) {
+        break;
+      }
+      wifi_retry_timer_ = 0;
 
-        wifi_retry_timer_ = 0;
+      Serial.println("Checking for known wifi connections");
+      if (this->checkWifi()) {
+        this->state_ = UPLOADING_DATA;
       } else {
-        Serial.printf("WiFi is offline, retrying in %lus\n",
-                      (WIFI_RETRY_INTERVAL_MS - wifi_retry_timer_) / 1000);
-      }
-    } else {
-      if (!dataUploaded) {
-        errorMode = !uploadAllSensorData();
-        dataUploaded = true;
-        if (!errorMode) {
-          Serial.println("Data uploaded successfully");
-        } else {
-          Serial.println("Failed to upload data");
-          // TODO: go into warning mode (e.g. LED blinking)
-          //       Block until the next retry
-          //       If all retries fail, go into error mode (e.g. LED blinking
-          //       faster)
-        }
+        Serial.printf("Wifi offline, retrying in %ds\n",
+                      WIFI_RETRY_INTERVAL_MS / 1000);
       }
 
-      if (!checkWifi()) {
-        collectionMode = true;
-        dataUploaded = false;
-        errorMode = false;
+    } break;
+
+    case UPLOADING_DATA: {
+      Serial.printf("Connected to WiFi: %s\n", WiFi.SSID().c_str());
+      int success = uploadAllSensorData();
+      if (success) {
+        Serial.println("All data uploaded successfully");
+        this->state_ = IDLE;
+      } else {
+        Serial.println("Error uploading data");
+        this->state_ = ERROR;
       }
+    } break;
+
+    // TODO: handle this better
+    case ERROR: {
+      Serial.println("Error. Rebooting");
+      rp2040.reboot();
+    } break;
     }
 
+    Serial.flush();
     sleep_ms(SENSOR_READ_INTERVAL_MS);
   }
 }

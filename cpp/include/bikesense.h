@@ -13,6 +13,13 @@
 
 typedef std::unordered_map<std::string, std::string> StringMap;
 
+enum BikeSenseStates {
+  IDLE,
+  COLLECTING_DATA,
+  UPLOADING_DATA,
+  ERROR,
+};
+
 class BikeSense {
 private:
   const int SENSOR_READ_INTERVAL_MS;
@@ -25,6 +32,8 @@ private:
 
   const std::string &BIKE_CODE;
   const std::string &UNIT_CODE;
+
+  BikeSenseStates state_ = IDLE;
 
   bool registered_ = false;
   int bikeId_ = -1;
@@ -47,8 +56,6 @@ private:
 
   bool uploadAllSensorData();
   int uploadData(const std::vector<SensorReading> &readings);
-
-  elapsedMillis wifi_retry_timer_;
 
 public:
   BikeSense(std::vector<SensorInterface *> sensors, SensorInterface *gps,
