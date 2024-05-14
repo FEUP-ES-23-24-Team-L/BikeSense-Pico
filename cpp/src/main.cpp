@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <bikesense.h>
 #include <mock.h>
+#include <noise.h>
 
 #define SERIAL_BAUD 9600
 
@@ -37,6 +38,7 @@ void setup() {
 void loop() {
   BikeSenseBuilder()
       .addSensor(new MockSensor())
+      .addSensor(new NoiseSensor())
       .addGps(new MockGps())
       .addDataStorage(new MockDataStorage())
       .whoAmI(BIKE_CODE, UNIT_CODE)

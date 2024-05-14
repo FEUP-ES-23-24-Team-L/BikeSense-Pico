@@ -7,7 +7,6 @@ void MockSensor::setup() { Serial.println("Mock sensor is setting up..."); }
 
 SensorReading MockSensor::read() const {
   return SensorReading()
-      .addMeasurement("noise_level", 1)
       .addMeasurement("temperature", 2)
       .addMeasurement("humidity", 3)
       .addMeasurement("uv_level", 4)
