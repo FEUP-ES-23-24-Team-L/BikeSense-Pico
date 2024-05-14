@@ -202,12 +202,16 @@ void BikeSense::run() {
       dataStorage_->store(readings);
 
       // Check the WiFi connection
-      if (wifi_retry_timer_ > WIFI_RETRY_INTERVAL_MS && checkWifi()) {
-        collectionMode = false;
-        Serial.printf("Connected to WiFi: %s\n", WiFi.SSID().c_str());
+      if (wifi_retry_timer_ > WIFI_RETRY_INTERVAL_MS) {
+        if (this->checkWifi()) {
+          collectionMode = false;
+          Serial.printf("Connected to WiFi: %s\n", WiFi.SSID().c_str());
+        }
+
+        wifi_retry_timer_ = 0;
       } else {
-        Serial.printf("WiFi is offline, retrying in %ds\n",
-                      WIFI_RETRY_INTERVAL_MS / 1000);
+        Serial.printf("WiFi is offline, retrying in %lus\n",
+                      (WIFI_RETRY_INTERVAL_MS - wifi_retry_timer_) / 1000);
       }
     } else {
       if (!dataUploaded) {
