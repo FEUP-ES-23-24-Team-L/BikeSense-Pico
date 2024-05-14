@@ -223,6 +223,13 @@ void BikeSense::run() {
     } break;
 
     case COLLECTING_DATA: {
+
+      this->gps_->update();
+      if (!this->gps_->isValid()) {
+        Serial.println("GPS data is invalid, skipping sensor readings");
+        break;
+      }
+
       SensorReading readings = this->readSensors();
       this->saveData(readings, this->gps_->timeString());
 

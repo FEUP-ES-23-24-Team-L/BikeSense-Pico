@@ -8,20 +8,26 @@
 
 void Gps::setup() { Serial1.begin(9600); }
 
-SensorReading Gps::read() {
-  if (Serial1.available()) {
+void Gps::update() {
+  Serial.println("Updating GPS...");
+  while (Serial1.available()) {
     this->gps_.encode(Serial1.read());
   }
-  SensorReading rd = SensorReading();
+  Serial.println("GPS updated.");
+}
 
-  /* if (this->gps_.altitude.isUpdated()) */
-  /* if (this->gps_.location.isValid()) */
-  rd.addMeasurement("latitude", this->gps_.location.lat())
+bool Gps::isValid() {
+  return this->gps_.location.isValid() && this->gps_.altitude.isValid() &&
+         this->gps_.speed.isValid() && this->gps_.date.isValid() &&
+         this->gps_.time.isValid();
+}
+
+SensorReading Gps::read() {
+  return SensorReading()
+      .addMeasurement("latitude", this->gps_.location.lat())
       .addMeasurement("longitude", this->gps_.location.lng())
       .addMeasurement("altitude", this->gps_.altitude.meters())
       .addMeasurement("speed", this->gps_.speed.kmph());
-
-  return rd;
 }
 
 std::string Gps::timeString() {

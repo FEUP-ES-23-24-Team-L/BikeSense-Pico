@@ -13,6 +13,8 @@ public:
 
 class GpsInterface : public SensorInterface {
 public:
+  virtual void update() = 0;
+  virtual bool isValid() = 0;
   virtual std::string timeString() = 0;
 };
 

@@ -41,12 +41,10 @@ void MockDataStorage::store(const std::string reading) {
     readings_.erase(readings_.begin());
   }
   readings_.push_back(reading);
-  /* Serial.printf("Mock data storage stored reading: %s\n", reading.c_str());
-   */
+  Serial.printf("Mock data storage stored reading: %s\n", reading.c_str());
 }
 
 retrievedData MockDataStorage::retrieve(int batchSize) {
-
   if (readings_.size() == 0) {
     return std::nullopt;
   }

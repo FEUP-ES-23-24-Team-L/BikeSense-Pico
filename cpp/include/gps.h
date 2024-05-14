@@ -11,6 +11,8 @@ private:
 
 public:
   void setup() override;
+  void update() override;
+  bool isValid() override;
   SensorReading read() override;
   std::string timeString() override;
 };
