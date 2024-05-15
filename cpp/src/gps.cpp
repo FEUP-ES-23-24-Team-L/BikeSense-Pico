@@ -4,22 +4,29 @@
 #include <Arduino.h>
 #include <iomanip>
 #include <sstream>
-#include <string>
 
 void Gps::setup() { Serial1.begin(9600); }
 
 void Gps::update() {
-  Serial.println("Updating GPS...");
   while (Serial1.available()) {
-    this->gps_.encode(Serial1.read());
+    char c = Serial1.read();
+    if (c == '\n') {
+      for (int i = 0; i < this->bufferIndex_; i++) {
+        /* Serial.write(this->buffer_[i]); */
+        this->gps_.encode(this->buffer_[i]);
+      }
+      this->bufferIndex_ = 0;
+      /* Serial.println(); */
+      break;
+    }
+    this->buffer_[bufferIndex_] = c;
+    this->bufferIndex_++;
   }
-  Serial.println("GPS updated.");
 }
 
 bool Gps::isValid() {
   return this->gps_.location.isValid() && this->gps_.altitude.isValid() &&
-         this->gps_.speed.isValid() && this->gps_.date.isValid() &&
-         this->gps_.time.isValid();
+         this->gps_.time.isValid() && this->gps_.date.isValid();
 }
 
 SensorReading Gps::read() {
@@ -41,7 +48,7 @@ std::string Gps::timeString() {
   // Construct a std::tm structure
   std::tm datetime = {};
   datetime.tm_year = year - 1900; // years since 1900
-  datetime.tm_mon = month - 1;    // months since January
+  datetime.tm_mon = month;        // months since January
   datetime.tm_mday = day;         // day of the month
   datetime.tm_hour = hour;        // hours since midnight
   datetime.tm_min = minute;       // minutes after the hour

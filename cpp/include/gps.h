@@ -8,6 +8,8 @@
 class Gps : public GpsInterface {
 private:
   TinyGPSPlus gps_;
+  char buffer_[1000];
+  char bufferIndex_ = 0;
 
 public:
   void setup() override;

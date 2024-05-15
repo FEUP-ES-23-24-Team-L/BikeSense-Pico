@@ -164,7 +164,7 @@ int BikeSense::saveData(const SensorReading rd, const std::string timestamp) {
   JsonDocument doc;
   std::string json;
 
-  doc["timestamp"] = rp2040.getCycleCount64();
+  doc["timestamp"] = timestamp;
   for (auto meas : rd.getMeasurements()) {
     doc[meas.first] = meas.second;
   }
@@ -230,6 +230,7 @@ void BikeSense::run() {
       this->gps_->update();
       if (!this->gps_->isValid()) {
         Serial.println("GPS data is invalid, skipping sensor readings");
+        // TODO: check if this can sleep for more time
         break;
       }
 
@@ -272,8 +273,7 @@ void BikeSense::run() {
     } break;
     }
 
-    Serial.flush();
-    sleep_ms(SENSOR_READ_INTERVAL_MS);
+    sleep_ms(1);
   }
 }
 
