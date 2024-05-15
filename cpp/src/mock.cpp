@@ -7,8 +7,6 @@ void MockSensor::setup() { Serial.println("Mock sensor is setting up..."); }
 
 SensorReading MockSensor::read() {
   return SensorReading()
-      .addMeasurement("temperature", 2)
-      .addMeasurement("humidity", 3)
       .addMeasurement("uv_level", 4)
       .addMeasurement("luminosity", 5)
       .addMeasurement("carbon_monoxide_level", 6)
