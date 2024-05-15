@@ -30,11 +30,26 @@ bool Gps::isValid() {
 }
 
 SensorReading Gps::read() {
-  return SensorReading()
-      .addMeasurement("latitude", this->gps_.location.lat())
-      .addMeasurement("longitude", this->gps_.location.lng())
-      .addMeasurement("altitude", this->gps_.altitude.meters())
-      .addMeasurement("speed", this->gps_.speed.kmph());
+  SensorReading gpsRead =
+      SensorReading()
+          .addMeasurement("latitude", this->gps_.location.lat())
+          .addMeasurement("longitude", this->gps_.location.lng())
+          .addMeasurement("altitude", this->gps_.altitude.meters());
+
+  if (this->gps_.speed.isValid()) {
+    gpsRead.addMeasurement("speed", this->gps_.speed.kmph());
+  }
+  if (this->gps_.course.isValid()) {
+    gpsRead.addMeasurement("course", this->gps_.course.deg());
+  }
+  if (this->gps_.satellites.isValid()) {
+    gpsRead.addMeasurement("satellites_in_use", this->gps_.satellites.value());
+  }
+  if (this->gps_.hdop.isValid()) {
+    gpsRead.addMeasurement("hdop", this->gps_.hdop.hdop());
+  }
+
+  return gpsRead;
 }
 
 std::string Gps::timeString() {
