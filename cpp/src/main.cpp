@@ -1,3 +1,4 @@
+#include "light.h"
 #include "tempHumidity.h"
 #include <Arduino.h>
 #include <bikesense.h>
@@ -42,6 +43,7 @@ void loop() {
   BikeSenseBuilder()
       .addSensor(new MockSensor())
       .addSensor(new NoiseSensor())
+      .addSensor(new LightSensor())
       .addSensor(new TempHumiditySensor())
       .addGps(new Gps())
       .addDataStorage(new SDCard())
