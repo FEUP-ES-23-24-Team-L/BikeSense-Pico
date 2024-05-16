@@ -169,6 +169,7 @@ int BikeSense::saveData(const SensorReading rd, const std::string timestamp) {
     doc[meas.first] = meas.second;
   }
   serializeJson(doc, json);
+  Serial.println(json.c_str());
   this->dataStorage_->store(json);
 
   return 0;
@@ -229,11 +230,17 @@ void BikeSense::run() {
 
       this->gps_->update();
       if (!this->gps_->isValid()) {
+        digitalWrite(LED_BUILTIN, LOW);
         Serial.println("GPS data is invalid, skipping sensor readings");
-        // TODO: check if this can sleep for more time
         break;
       }
 
+      // Wait for the GPS data to be updated
+      if (!this->gps_->isUpdated()) {
+        break;
+      }
+
+      digitalWrite(LED_BUILTIN, HIGH);
       SensorReading readings = this->readSensors();
       this->saveData(readings, this->gps_->timeString());
 

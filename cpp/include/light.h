@@ -5,7 +5,8 @@
 #include "interfaces.h"
 
 class LightSensor : public SensorInterface {
-  const int LIGHT_PIN = 23;
+  const int SDA_PIN = 4;
+  const int SCL_PIN = 5;
 
   SI114X SI1145 = SI114X();
   bool initialized = false;

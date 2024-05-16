@@ -1,10 +1,12 @@
 #include "light.h"
+#include "Wire.h"
 #include "sensorReading.h"
 
 void LightSensor::setup() {
+  Wire.setSDA(SDA_PIN);
+  Wire.setSCL(SCL_PIN);
 
   int maxAttempts = 5;
-
   while (maxAttempts > 0) {
     if (SI1145.Begin()) {
       initialized = true;
@@ -12,7 +14,7 @@ void LightSensor::setup() {
     }
 
     maxAttempts--;
-    delay(1000);
+    delay(500);
   }
 
   if (!initialized)

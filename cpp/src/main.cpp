@@ -7,7 +7,7 @@
 #include <noise.h>
 #include <sdCard.h>
 
-#define SERIAL_BAUD 9600
+#define SERIAL_BAUD 115200
 
 #ifndef UNIT_CODE
 #define BIKE_CODE "BSB1"

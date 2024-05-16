@@ -15,6 +15,7 @@ public:
   void setup() override;
   void update() override;
   bool isValid() override;
+  bool isUpdated() override;
   SensorReading read() override;
   std::string timeString() override;
 };

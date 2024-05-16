@@ -29,6 +29,8 @@ bool Gps::isValid() {
          this->gps_.time.isValid() && this->gps_.date.isValid();
 }
 
+bool Gps::isUpdated() { return this->gps_.location.isUpdated(); }
+
 SensorReading Gps::read() {
   SensorReading gpsRead =
       SensorReading()
