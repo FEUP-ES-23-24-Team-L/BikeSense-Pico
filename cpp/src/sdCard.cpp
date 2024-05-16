@@ -12,24 +12,43 @@ bool SDCard::setup() {
     return false;
   }
 
-  Serial.println("SD Card initialized!");
+  File logFile = SD.open(DATAFILE, FILE_WRITE);
+  if (!logFile) {
+    Serial.println("Error opening log file!");
+    return false;
+  }
+
+  if (logFile.size() > LOGFILE_MAX_SIZE && !logFile.truncate(0)) {
+    Serial.println("Error truncating log file!");
+    logFile.close();
+    return false;
+  }
+
+  logFile.close();
+
   return true;
 }
 
-void SDCard::store(const std::string data) {
-  File f = SD.open("Bikesense.txt", FILE_WRITE);
+bool SDCard::store(const std::string data) {
+  File f = SD.open(DATAFILE, FILE_WRITE);
   if (f) {
     f.println(data.c_str());
   } else {
-    Serial.println("Failed to open file for writing");
+    return false;
   }
   f.close();
+  return true;
 }
 
 retrievedData SDCard::retrieve(int batchSize) {
-  File f = SD.open("Bikesense.txt", FILE_READ);
+  File f = SD.open(DATAFILE, FILE_READ);
   if (!f) {
-    Serial.println("Failed to open file for reading");
+    return std::nullopt;
+  }
+
+  if (f.position() >= f.size()) {
+    lastReadPosition_ = 0;
+    this->logInfo("End of file reached, resetting read position");
     return std::nullopt;
   }
 
@@ -54,19 +73,65 @@ retrievedData SDCard::retrieve(int batchSize) {
   }
 
   lastReadPosition_ = f.position();
-
-  if (f.position() >= f.size()) {
-    lastReadPosition_ = 0;
-    Serial.println("Reached end of file, resetting read position...");
-  }
   f.close();
-
   return data;
 }
 
-void SDCard::clear() {
-  File f = SD.open("Bikesense.txt", FILE_WRITE);
-  f.truncate(0);
+bool SDCard::clear() {
+  File f = SD.open(DATAFILE, FILE_WRITE);
+  if (!f) {
+    return false;
+  }
+
+  if (!f.truncate(0)) {
+    f.close();
+    return false;
+  }
+
   f.close();
-  Serial.println("Data file cleared!");
+  return true;
+}
+
+bool SDCard::logInfo(const std::string message) {
+  std::string infoMsg =
+      "[" + std::to_string(millis()) + "] " + "[INFO]" + message;
+  Serial.println(infoMsg.c_str());
+
+  File f = SD.open(LOGFILE, FILE_WRITE);
+  if (!f) {
+    return false;
+  }
+  f.println(infoMsg.c_str());
+  f.close();
+
+  return true;
+}
+
+bool SDCard::logError(const std::string message) {
+  std::string errorMsg =
+      "[" + std::to_string(millis()) + "] " + "[ERROR]" + message;
+  Serial.println(errorMsg.c_str());
+
+  File f = SD.open(LOGFILE, FILE_WRITE);
+  if (!f) {
+    return false;
+  }
+  f.println(errorMsg.c_str());
+  f.close();
+
+  return true;
+}
+
+bool SDCard::logDumpOverSerial() {
+  File f = SD.open(LOGFILE, FILE_READ);
+  if (!f) {
+    return false;
+  }
+
+  while (f.available()) {
+    Serial.println(f.readStringUntil('\n').c_str());
+  }
+  f.close();
+
+  return true;
 }

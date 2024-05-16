@@ -1,4 +1,5 @@
 #include "light.h"
+#include "pico/unique_id.h"
 #include "tempHumidity.h"
 #include <Arduino.h>
 #include <bikesense.h>
@@ -11,7 +12,6 @@
 
 #ifndef UNIT_CODE
 #define BIKE_CODE "BSB1"
-#define UNIT_CODE "BSU1"
 #endif
 
 #ifndef STASSID_DEFAULT
@@ -19,7 +19,7 @@
 #define STAPSK_DEFAULT "Bike123!"
 #endif
 
-#define LOCAL_TEST_MODE
+/* #define LOCAL_TEST_MODE */
 
 #ifndef LOCAL_TEST_MODE
 #define API_ENDPOINT "http://10.227.103.175:8080/api/v1"
@@ -40,6 +40,11 @@ void setup() {
 }
 
 void loop() {
+  uint ID_LEN = 2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 1;
+  char id[ID_LEN];
+  pico_get_unique_board_id_string(id, ID_LEN);
+  digitalWrite(LED_BUILTIN, HIGH);
+
   BikeSenseBuilder()
       .addSensor(new MockSensor())
       .addSensor(new NoiseSensor())
@@ -47,7 +52,7 @@ void loop() {
       .addSensor(new TempHumiditySensor())
       .addGps(new Gps())
       .addDataStorage(new SDCard())
-      .whoAmI(BIKE_CODE, UNIT_CODE)
+      .whoAmI(BIKE_CODE, id)
       .withApiConfig(API_TOKEN, API_ENDPOINT)
       .addNetwork(STASSID_DEFAULT, STAPSK_DEFAULT)
 #ifdef LOCAL_TEST_MODE

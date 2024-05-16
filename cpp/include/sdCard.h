@@ -13,13 +13,23 @@ private:
   const int CS_ = 17;
   const int SCK_ = 18;
 
+  const char *DATAFILE = "Bikesense.txt";
+  const char *LOGFILE = "Bikesense_Logs.txt";
+
+  const int LOGFILE_MAX_SIZE = 1000000; // 1MB
+
   size_t lastReadPosition_ = 0;
 
 public:
   bool setup() override;
-  void store(const std::string data) override;
-  void clear() override;
+
   retrievedData retrieve(int batchSize) override;
+  bool store(const std::string data) override;
+  bool clear() override;
+
+  bool logInfo(const std::string message) override;
+  bool logError(const std::string message) override;
+  bool logDumpOverSerial() override;
 };
 
 #endif

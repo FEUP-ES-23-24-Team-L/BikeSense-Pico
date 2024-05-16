@@ -46,7 +46,7 @@ private:
   HTTPClient http_;
   WiFiMulti multi_;
 
-  void setupSensors();
+  void setup();
   SensorReading readSensors() const;
 
   inline bool checkWifi();
@@ -56,7 +56,8 @@ private:
 
   bool uploadAllSensorData();
   int uploadData(const std::vector<std::string> &readings);
-  int saveData(const SensorReading rd, const std::string timestamp);
+  int saveData(const SensorReading sensorData, const SensorReading gpsData,
+               const std::string timestamp);
 
 public:
   BikeSense(std::vector<SensorInterface *> sensors, GpsInterface *gps,

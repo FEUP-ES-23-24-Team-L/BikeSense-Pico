@@ -33,12 +33,13 @@ bool MockDataStorage::setup() {
   return true;
 }
 
-void MockDataStorage::store(const std::string reading) {
+bool MockDataStorage::store(const std::string reading) {
   if (readings_.size() > 10) {
     readings_.erase(readings_.begin());
   }
   readings_.push_back(reading);
   Serial.printf("Mock data storage stored reading: %s\n", reading.c_str());
+  return true;
 }
 
 retrievedData MockDataStorage::retrieve(int batchSize) {

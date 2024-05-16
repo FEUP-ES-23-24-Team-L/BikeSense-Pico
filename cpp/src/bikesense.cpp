@@ -79,7 +79,7 @@ BikeSense::BikeSense(std::vector<SensorInterface *> sensors, GpsInterface *gps,
   http_.setTimeout(HTTP_TIMEOUT_MS);
 }
 
-void BikeSense::setupSensors() {
+void BikeSense::setup() {
   gps_->setup();
   if (!dataStorage_->setup()) {
     Serial.println("Failed to setup data storage");
@@ -94,7 +94,6 @@ void BikeSense::setupSensors() {
 SensorReading BikeSense::readSensors() const {
   SensorReading readings;
 
-  readings += (gps_->read());
   for (auto sensor : sensors_) {
     readings += (sensor->read());
   }
@@ -105,15 +104,21 @@ SensorReading BikeSense::readSensors() const {
 inline bool BikeSense::checkWifi() { return multi_.run() == WL_CONNECTED; }
 
 int BikeSense::registerAndGetID(std::string payload, std::string endpoint) {
-
   http_.begin((API_ENDPOINT + endpoint).c_str());
   http_.addHeader("Content-Type", "application/json");
   http_.addHeader("Authorization", API_TOKEN.c_str());
 
   int httpCode = http_.POST(payload.c_str());
   if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_CREATED) {
-    Serial.printf("Failed to register parameter with error %d (%s)\n", httpCode,
-                  http_.errorToString(httpCode).c_str());
+
+    std::string errorMsg = "Failed to register " + endpoint;
+    std::string httpError = http_.errorToString(httpCode).c_str();
+    std::string response = http_.getString().c_str();
+    dataStorage_->logError(errorMsg);
+    dataStorage_->logError(httpError);
+    dataStorage_->logError(response);
+
+    http_.end();
     return -1;
   }
 
@@ -127,7 +132,6 @@ int BikeSense::registerAndGetID(std::string payload, std::string endpoint) {
 }
 
 int BikeSense::registerTripAndGetID() {
-
   if (!registered_) {
     std::string bikeCodePayload = "{\"code\": \"" + BIKE_CODE + "\"}";
     std::string unitCodePayload = "{\"code\": \"" + UNIT_CODE + "\"}";
@@ -150,27 +154,29 @@ int BikeSense::uploadData(const std::vector<std::string> &readings) {
   JsonDocument doc;
   std::string payload;
 
-  Serial.printf("Uploading %d readings:\n", readings.size());
   for (size_t i = 0; i < readings.size(); i++) {
     doc[i] = readings[i];
   }
   serializeJson(doc, payload);
-  Serial.println(payload.c_str());
 
   return http_.POST(payload.c_str());
 }
 
-int BikeSense::saveData(const SensorReading rd, const std::string timestamp) {
+int BikeSense::saveData(const SensorReading sensorData,
+                        const SensorReading gpsData,
+                        const std::string timestamp) {
   JsonDocument doc;
-  std::string json;
-
   doc["timestamp"] = timestamp;
-  for (auto meas : rd.getMeasurements()) {
+  for (auto gps : gpsData.getMeasurements()) {
+    doc["gps_data"][gps.first] = gps.second;
+  }
+  for (auto meas : sensorData.getMeasurements()) {
     doc[meas.first] = meas.second;
   }
+
+  std::string json;
   serializeJson(doc, json);
-  Serial.println(json.c_str());
-  this->dataStorage_->store(json);
+  dataStorage_->store(json);
 
   return 0;
 }
@@ -178,7 +184,7 @@ int BikeSense::saveData(const SensorReading rd, const std::string timestamp) {
 bool BikeSense::uploadAllSensorData() {
   int tripId_ = registerTripAndGetID();
   if (tripId_ == -1) {
-    Serial.println("Failed to register trip");
+    dataStorage_->logError("Failed to register trip, aborting upload");
     http_.end();
     return false;
   }
@@ -188,22 +194,26 @@ bool BikeSense::uploadAllSensorData() {
   http_.addHeader("Authorization", API_TOKEN.c_str());
   http_.addHeader("Trip-ID", String(tripId_).c_str());
 
-  Serial.println("Uploading all sensor data...");
+  dataStorage_->logInfo("Staring Data Upload");
 
-  int sucessfullUploads = 0;
+  int nUploads = 0;
   retrievedData data;
   while (data = dataStorage_->retrieve(UPLOAD_BATCH_SIZE), data.has_value()) {
     int httpCode = uploadData(data.value());
     if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_CREATED) {
-      Serial.printf("HTTP post failed after %d batches with error %s\n",
-                    sucessfullUploads, http_.errorToString(httpCode).c_str());
-      for (auto reading : data.value()) {
-        dataStorage_->store(reading);
-      }
+
+      std::string errorMsg =
+          "HTTP post failed after " + std::to_string(nUploads) + " batches";
+      std::string httpError = http_.errorToString(httpCode).c_str();
+      std::string response = http_.getString().c_str();
+      dataStorage_->logError(errorMsg);
+      dataStorage_->logError(httpError);
+      dataStorage_->logError(response);
+
       http_.end();
       return false;
     }
-    sucessfullUploads++;
+    nUploads++;
   }
 
   http_.end();
@@ -211,38 +221,44 @@ bool BikeSense::uploadAllSensorData() {
 }
 
 void BikeSense::run() {
-  this->setupSensors();
+  setup();
 
   elapsedMillis wifi_retry_timer_ = WIFI_RETRY_INTERVAL_MS;
+  bool logsDumped = false;
 
-  // TODO: clean up the loop state machine
   while (true) {
-    switch (this->state_) {
+
+    if (Serial.availableForWrite() && !logsDumped) {
+      dataStorage_->logDumpOverSerial();
+      logsDumped = true;
+    } else if (!Serial.availableForWrite()) {
+      logsDumped = false;
+    }
+
+    switch (state_) {
 
     case IDLE: {
-      Serial.println("Checking for known wifi connections");
-      if (!this->checkWifi()) {
-        this->state_ = COLLECTING_DATA;
+      if (!checkWifi()) {
+        state_ = COLLECTING_DATA;
+        dataStorage_->logInfo("Starting data collection for new trip");
       }
     } break;
 
     case COLLECTING_DATA: {
-
-      this->gps_->update();
-      if (!this->gps_->isValid()) {
+      gps_->update();
+      if (!gps_->isValid()) {
         digitalWrite(LED_BUILTIN, LOW);
         Serial.println("GPS data is invalid, skipping sensor readings");
         break;
       }
 
       // Wait for the GPS data to be updated
-      if (!this->gps_->isUpdated()) {
+      if (!gps_->isUpdated()) {
         break;
       }
 
       digitalWrite(LED_BUILTIN, HIGH);
-      SensorReading readings = this->readSensors();
-      this->saveData(readings, this->gps_->timeString());
+      saveData(readSensors(), gps_->read(), gps_->timeString());
 
       if (wifi_retry_timer_ < WIFI_RETRY_INTERVAL_MS) {
         break;
@@ -250,9 +266,8 @@ void BikeSense::run() {
       wifi_retry_timer_ = 0;
 
       Serial.println("Checking for known wifi connections");
-      if (this->checkWifi()) {
-        this->state_ = UPLOADING_DATA;
-      } else {
+      if (checkWifi()) {
+        state_ = UPLOADING_DATA;
         Serial.printf("Wifi offline, retrying in %ds\n",
                       WIFI_RETRY_INTERVAL_MS / 1000);
       }
@@ -260,22 +275,26 @@ void BikeSense::run() {
     } break;
 
     case UPLOADING_DATA: {
-      Serial.printf("Connected to WiFi: %s\n", WiFi.SSID().c_str());
+      std::string wifiMsg =
+          "Connected to WiFi: " + std::string(WiFi.SSID().c_str());
+      std::string endpointMsg = "Uploading data to " + API_ENDPOINT;
+      dataStorage_->logInfo(wifiMsg);
+      dataStorage_->logInfo(endpointMsg);
 
       int success = uploadAllSensorData();
       if (success) {
-        Serial.println("All data uploaded successfully");
-        this->state_ = IDLE;
-        this->dataStorage_->clear();
+        state_ = IDLE;
+        dataStorage_->logInfo("Data upload successful, clearing storage");
+        dataStorage_->clear();
       } else {
-        Serial.println("Error uploading data");
-        this->state_ = ERROR;
+        dataStorage_->logError("Failed to upload data, going into error mode");
+        state_ = ERROR;
       }
     } break;
 
     // TODO: handle this better
     case ERROR: {
-      Serial.println("Error. Rebooting");
+      dataStorage_->logError("Rebooting device due to error...");
       rp2040.reboot();
     } break;
     }
@@ -284,13 +303,10 @@ void BikeSense::run() {
   }
 }
 
-// TODO: - Implement a log file to store error/log messages
-//       - Implement a logger class to handle log messages
-//       - Store relevant data in order to do automatic
+// TODO: - Store relevant data in order to do automatic
 //         upload retries for failed uploads for a certain
 //         trip.
 //       - Dump data to backup storage in case of failed
 //         uploads and retry later (when in idle mode i.e.)
 //       - Implement a watchdog timer to reboot the device (?)
 //       - Brainstorm about improving trip start/end detection
-//       - Automatically dump log messages to Serial when available

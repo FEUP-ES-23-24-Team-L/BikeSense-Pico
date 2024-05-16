@@ -24,9 +24,14 @@ typedef std::optional<std::vector<std::string>> retrievedData;
 class DataStorageInterface {
 public:
   virtual bool setup() = 0;
-  virtual void store(const std::string data) = 0;
-  virtual void clear() = 0;
+
   virtual retrievedData retrieve(int batchSize) = 0;
+  virtual bool store(const std::string data) = 0;
+  virtual bool clear() = 0;
+
+  virtual bool logInfo(const std::string message) = 0;
+  virtual bool logError(const std::string message) = 0;
+  virtual bool logDumpOverSerial() = 0;
 };
 
 #endif
