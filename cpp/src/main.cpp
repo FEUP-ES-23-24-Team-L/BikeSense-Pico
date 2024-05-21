@@ -1,3 +1,4 @@
+#include "infoLed.h"
 #include "light.h"
 #include "pico/unique_id.h"
 #include "tempHumidity.h"
@@ -52,6 +53,7 @@ void loop() {
       .addSensor(new TempHumiditySensor())
       .addGps(new Gps())
       .addDataStorage(new SDCard())
+      .addLed(new InfoLed())
       .whoAmI(BIKE_CODE, id)
       .withApiConfig(API_TOKEN, API_ENDPOINT)
       .addNetwork(STASSID_DEFAULT, STAPSK_DEFAULT)

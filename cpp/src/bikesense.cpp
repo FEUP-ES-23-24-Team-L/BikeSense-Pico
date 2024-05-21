@@ -27,6 +27,11 @@ BikeSenseBuilder::addDataStorage(DataStorageInterface *dataStorage) {
   return *this;
 }
 
+BikeSenseBuilder &BikeSenseBuilder::addLed(LedInterface *led) {
+  led_ = led;
+  return *this;
+}
+
 BikeSenseBuilder &BikeSenseBuilder::whoAmI(const std::string bikeCode,
                                            const std::string unitCode) {
   bikeCode_ = bikeCode;
@@ -49,12 +54,12 @@ BikeSenseBuilder &BikeSenseBuilder::addNetwork(const std::string &ssid,
 }
 
 BikeSense BikeSenseBuilder::build() {
-  return BikeSense(sensors_, gps_, dataStorage_, networks_, bikeCode_,
+  return BikeSense(sensors_, gps_, dataStorage_, led_, networks_, bikeCode_,
                    unitCode_, apiAuthToken_, apiEndpoint_);
 }
 
 BikeSense::BikeSense(std::vector<SensorInterface *> sensors, GpsInterface *gps,
-                     DataStorageInterface *dataStorage,
+                     DataStorageInterface *dataStorage, LedInterface *led,
                      const StringMap &networks, const std::string &bikeCode,
                      const std::string &unitCode,
                      const std::string &apiAuthToken,
@@ -62,7 +67,7 @@ BikeSense::BikeSense(std::vector<SensorInterface *> sensors, GpsInterface *gps,
                      const int sensor_read_interval_ms,
                      const int wifi_retry_interval_ms,
                      const int http_timeout_ms, const int upload_batch_size)
-    : sensors_(sensors), gps_(gps), dataStorage_(dataStorage),
+    : sensors_(sensors), gps_(gps), dataStorage_(dataStorage), led_(led),
       SENSOR_READ_INTERVAL_MS(sensor_read_interval_ms),
       WIFI_RETRY_INTERVAL_MS(wifi_retry_interval_ms),
       HTTP_TIMEOUT_MS(http_timeout_ms), UPLOAD_BATCH_SIZE(upload_batch_size),
@@ -241,24 +246,25 @@ void BikeSense::run() {
       if (!checkWifi()) {
         state_ = COLLECTING_DATA;
         dataStorage_->logInfo("Starting data collection for new trip");
+        led_->setColor(led_->BYTE_MAX, led_->BYTE_MAX, led_->BYTE_MAX);
       }
     } break;
 
     case COLLECTING_DATA: {
       gps_->update();
-      if (!gps_->isValid()) {
+
+      if (gps_->isValid()) {
+        led_->setColor(0, led_->BYTE_MAX, 0);
+        // Wait for the GPS data to be updated
+        if (gps_->isUpdated()) {
+          digitalWrite(LED_BUILTIN, HIGH);
+          saveData(readSensors(), gps_->read(), gps_->timeString());
+        }
+      } else {
+        led_->setColor(led_->BYTE_MAX, 0, 0);
         digitalWrite(LED_BUILTIN, LOW);
         Serial.println("GPS data is invalid, skipping sensor readings");
-        break;
       }
-
-      // Wait for the GPS data to be updated
-      if (!gps_->isUpdated()) {
-        break;
-      }
-
-      digitalWrite(LED_BUILTIN, HIGH);
-      saveData(readSensors(), gps_->read(), gps_->timeString());
 
       if (wifi_retry_timer_ < WIFI_RETRY_INTERVAL_MS) {
         break;
@@ -275,6 +281,8 @@ void BikeSense::run() {
     } break;
 
     case UPLOADING_DATA: {
+      led_->setColor(0, led_->BYTE_MAX, 0);
+
       std::string wifiMsg =
           "Connected to WiFi: " + std::string(WiFi.SSID().c_str());
       std::string endpointMsg = "Uploading data to " + API_ENDPOINT;
@@ -294,6 +302,7 @@ void BikeSense::run() {
 
     // TODO: handle this better
     case ERROR: {
+      led_->setColor(led_->BYTE_MAX, 0, 0);
       dataStorage_->logError("Rebooting device due to error...");
       rp2040.reboot();
     } break;

@@ -3,6 +3,7 @@
 
 #include <sensorReading.h>
 
+#include <Arduino.h>
 #include <vector>
 
 class SensorInterface {
@@ -32,6 +33,14 @@ public:
   virtual bool logInfo(const std::string message) = 0;
   virtual bool logError(const std::string message) = 0;
   virtual bool logDumpOverSerial() = 0;
+};
+
+class LedInterface {
+public:
+  const byte BYTE_MAX = 255;
+
+  virtual void setup() = 0;
+  virtual void setColor(byte r, byte g, byte b) = 0;
 };
 
 #endif

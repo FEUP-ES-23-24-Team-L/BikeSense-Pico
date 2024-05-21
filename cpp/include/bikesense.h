@@ -42,6 +42,7 @@ private:
   std::vector<SensorInterface *> sensors_;
   GpsInterface *gps_;
   DataStorageInterface *dataStorage_;
+  LedInterface *led_;
 
   HTTPClient http_;
   WiFiMulti multi_;
@@ -61,9 +62,10 @@ private:
 
 public:
   BikeSense(std::vector<SensorInterface *> sensors, GpsInterface *gps,
-            DataStorageInterface *dataStorage, const StringMap &networks,
-            const std::string &bikeCode, const std::string &unitCode,
-            const std::string &apiAuthToken, const std::string &apiEndpoint,
+            DataStorageInterface *dataStorage, LedInterface *led,
+            const StringMap &networks, const std::string &bikeCode,
+            const std::string &unitCode, const std::string &apiAuthToken,
+            const std::string &apiEndpoint,
             const WiFiMode_t wifi_mode = WIFI_STA,
             const int sensor_read_interval_ms = 1000,
             const int wifi_retry_interval_ms = 30000,
@@ -83,6 +85,7 @@ private:
   std::vector<SensorInterface *> sensors_;
   GpsInterface *gps_;
   DataStorageInterface *dataStorage_;
+  LedInterface *led_;
   StringMap networks_;
 
 public:
@@ -93,6 +96,7 @@ public:
   BikeSenseBuilder &addGps(GpsInterface *gps);
   BikeSenseBuilder &addSensor(SensorInterface *sensor);
   BikeSenseBuilder &addDataStorage(DataStorageInterface *dataStorage);
+  BikeSenseBuilder &addLed(LedInterface *led);
 
   BikeSenseBuilder &withApiConfig(const std::string &apiToken,
                                   const std::string &apiEndpoint);
