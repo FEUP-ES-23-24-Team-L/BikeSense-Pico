@@ -281,7 +281,7 @@ void BikeSense::run() {
     } break;
 
     case UPLOADING_DATA: {
-      led_->setColor(0, led_->BYTE_MAX, 0);
+      led_->setColor(0, 0, led_->BYTE_MAX);
 
       std::string wifiMsg =
           "Connected to WiFi: " + std::string(WiFi.SSID().c_str());
