@@ -5,7 +5,7 @@
 #include <iomanip>
 #include <sstream>
 
-#define GPS_DEBUG
+// #define GPS_DEBUG
 
 void Gps::setup() { Serial1.begin(9600); }
 

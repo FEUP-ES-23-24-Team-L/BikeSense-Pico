@@ -20,7 +20,7 @@
 #define STAPSK_DEFAULT "Bike123!"
 #endif
 
-/* #define LOCAL_TEST_MODE */
+// #define LOCAL_TEST_MODE
 
 #ifndef LOCAL_TEST_MODE
 #define API_ENDPOINT "http://10.227.103.175:8080/api/v1"
@@ -31,7 +31,7 @@
 #define STASSID_TEST "ArchBtw"
 #define STAPSK_TEST "123arch321"
 
-#define API_ENDPOINT "http://192.168.163.175:8080/api/v1"
+#define API_ENDPOINT "http://192.168.84.176:8080/api/v1"
 #define API_TOKEN "TestToken"
 #endif
 

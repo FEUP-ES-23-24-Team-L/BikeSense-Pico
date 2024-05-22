@@ -94,7 +94,7 @@ bool SDCard::clear() {
 
 bool SDCard::logInfo(const std::string message) {
   std::string infoMsg =
-      "[" + std::to_string(millis()) + "] " + "[INFO]" + message;
+      "[" + std::to_string(millis()) + "] " + "[INFO] " + message;
   Serial.println(infoMsg.c_str());
 
   File f = SD.open(LOGFILE, FILE_WRITE);
@@ -109,7 +109,7 @@ bool SDCard::logInfo(const std::string message) {
 
 bool SDCard::logError(const std::string message) {
   std::string errorMsg =
-      "[" + std::to_string(millis()) + "] " + "[ERROR]" + message;
+      "[" + std::to_string(millis()) + "] " + "[ERROR] " + message;
   Serial.println(errorMsg.c_str());
 
   File f = SD.open(LOGFILE, FILE_WRITE);

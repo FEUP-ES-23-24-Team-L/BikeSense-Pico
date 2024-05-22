@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <string>
 
 BikeSenseBuilder::BikeSenseBuilder() {
   sensors_ = std::vector<SensorInterface *>();
@@ -79,9 +80,7 @@ BikeSense::BikeSense(std::vector<SensorInterface *> sensors, GpsInterface *gps,
     multi_.addAP(ssid.c_str(), password.c_str());
   }
 
-  http_.setReuse(true);
   http_.setInsecure();
-  http_.setTimeout(HTTP_TIMEOUT_MS);
 }
 
 void BikeSense::setup() {
@@ -113,22 +112,36 @@ int BikeSense::registerAndGetID(std::string payload, std::string endpoint) {
   http_.addHeader("Content-Type", "application/json");
   http_.addHeader("Authorization", API_TOKEN.c_str());
 
-  int httpCode = http_.POST(payload.c_str());
-  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_CREATED) {
+  const int nRetries = 5;
 
+  dataStorage_->logInfo("Posting " + payload + " to " + endpoint);
+
+  int httpCode;
+  for (int rt = 0; rt < nRetries; rt++) {
+    httpCode = http_.POST(payload.c_str());
+    std::string msg = "Post code: " + std::to_string(httpCode) + " (attempt " +
+                      std::to_string(rt) + ")";
+    dataStorage_->logInfo(msg);
+    if (httpCode == HTTP_CODE_CREATED || httpCode == HTTP_CODE_OK)
+      break;
+  }
+
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_CREATED) {
     std::string errorMsg = "Failed to register " + endpoint;
-    std::string httpError = http_.errorToString(httpCode).c_str();
-    std::string response = http_.getString().c_str();
     dataStorage_->logError(errorMsg);
+
+    std::string httpError = http_.errorToString(httpCode).c_str();
     dataStorage_->logError(httpError);
-    dataStorage_->logError(response);
+
+    const String msg = http_.getString();
+    if (msg != nullptr)
+      dataStorage_->logError(msg.c_str());
 
     http_.end();
     return -1;
   }
 
   const String &response = http_.getString();
-  Serial.printf("Response: %s\n", response.c_str());
   JsonDocument doc;
   deserializeJson(doc, response);
   http_.end();
@@ -138,9 +151,10 @@ int BikeSense::registerAndGetID(std::string payload, std::string endpoint) {
 
 int BikeSense::registerTripAndGetID() {
   if (!registered_) {
+    dataStorage_->logInfo("Trying to register bike and sensor unit");
     std::string bikeCodePayload = "{\"code\": \"" + BIKE_CODE + "\"}";
-    std::string unitCodePayload = "{\"code\": \"" + UNIT_CODE + "\"}";
     bikeId_ = registerAndGetID(bikeCodePayload, "/bike/register");
+    std::string unitCodePayload = "{\"code\": \"" + UNIT_CODE + "\"}";
     unitId_ = registerAndGetID(unitCodePayload, "/sensor_unit/register");
     if (bikeId_ == -1 || unitId_ == -1) {
       return -1;
@@ -156,14 +170,14 @@ int BikeSense::registerTripAndGetID() {
 }
 
 int BikeSense::uploadData(const std::vector<std::string> &readings) {
-  JsonDocument doc;
   std::string payload;
+  payload = "[";
 
-  for (size_t i = 0; i < readings.size(); i++) {
-    doc[i] = readings[i];
+  for (size_t i = 0; i < readings.size() - 1; i++) {
+    payload += readings[i] + ",";
   }
-  serializeJson(doc, payload);
 
+  payload += readings[readings.size() - 1] + "]";
   return http_.POST(payload.c_str());
 }
 
@@ -187,6 +201,14 @@ int BikeSense::saveData(const SensorReading sensorData,
 }
 
 bool BikeSense::uploadAllSensorData() {
+  dataStorage_->logInfo("Sleeping for wifi shenanigans");
+  sleep_ms(3000);
+
+  http_.begin((API_ENDPOINT + "/check_health").c_str());
+  int httpCode = http_.GET();
+  dataStorage_->logInfo(http_.errorToString(httpCode).c_str());
+  http_.end();
+
   dataStorage_->logInfo("Trying to register trip");
   int tripId_ = registerTripAndGetID();
   if (tripId_ == -1) {
@@ -197,16 +219,15 @@ bool BikeSense::uploadAllSensorData() {
   std::string msg = "Trip registered with id: " + std::to_string(tripId_);
   dataStorage_->logInfo(msg);
 
-  http_.begin((API_ENDPOINT + "/trip/upload_data").c_str());
-  http_.addHeader("Content-Type", "application/json");
-  http_.addHeader("Authorization", API_TOKEN.c_str());
-  http_.addHeader("Trip-ID", String(tripId_).c_str());
-
   dataStorage_->logInfo("Starting Bulk Data Upload");
-
-  int nUploads = 0;
+  int nUploads = 1;
   retrievedData data;
   while (data = dataStorage_->retrieve(UPLOAD_BATCH_SIZE), data.has_value()) {
+    http_.begin((API_ENDPOINT + "/trip/upload_data").c_str());
+    http_.addHeader("Content-Type", "application/json");
+    http_.addHeader("Authorization", API_TOKEN.c_str());
+    http_.addHeader("Trip-ID", String(tripId_).c_str());
+
     int httpCode = uploadData(data.value());
     if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_CREATED) {
 
@@ -221,11 +242,11 @@ bool BikeSense::uploadAllSensorData() {
       http_.end();
       return false;
     }
-    nUploads++;
     dataStorage_->logInfo("Batch " + std::to_string(nUploads) + " uploaded");
+    http_.end();
+    nUploads++;
   }
 
-  http_.end();
   return true;
 }
 
