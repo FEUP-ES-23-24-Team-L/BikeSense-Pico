@@ -91,9 +91,15 @@ void BikeSense::setup() {
     this->state_ = ERROR;
   }
 
+  if (led_ != nullptr) {
+    led_->setup();
+  }
+
   for (auto sensor : sensors_) {
     sensor->setup();
   }
+
+  dataStorage_->logInfo("BikeSense setup complete", gps_->timeString());
 }
 
 SensorReading BikeSense::readSensors() const {
@@ -267,7 +273,7 @@ bool BikeSense::registerAndUploadTrip(std::string filename) {
   return uploadTrip(filename, tripId, 0);
 }
 
-void BikeSense::uploadBackups(std::vector<std::string> backupFiles) {
+void BikeSense::uploadBackups(std::vector<std::string> &backupFiles) {
   led_->setColor(led_->BYTE_MAX, 0, led_->BYTE_MAX);
 
   for (auto file : backupFiles) {
@@ -324,34 +330,46 @@ void BikeSense::run() {
   const int LED_BLINK_INTERVAL_MS = 500;
   bool builtin_led_state = false;
 
-  auto wifiIsConnected = [this]() { return multi_.run() == WL_CONNECTED; };
-  auto checkWifi = [this, wifiIsConnected, &wifi_retry_timer_]() {
+  auto checkWifi = [this, &wifi_retry_timer_]() {
     if (wifi_retry_timer_ < WIFI_RETRY_INTERVAL_MS)
-      return;
+      return false;
 
     wifi_retry_timer_ = 0;
 
     Serial.println("Checking for known wifi connections");
-    if (!wifiIsConnected())
+    if (multi_.run() != WL_CONNECTED) {
+
       Serial.printf("Wifi offline, retrying in %ds\n",
                     WIFI_RETRY_INTERVAL_MS / 1000);
-    else
-      this->state_ = UPLOADING_DATA;
+      return false;
+    }
+
+    return true;
   };
 
   std::vector<std::string> backupFiles = dataStorage_->getBackUpFiles();
-
   led_->setColor(led_->BYTE_MAX, led_->BYTE_MAX, led_->BYTE_MAX);
+
   while (true) {
+    gps_->update();
+
+    // NOTE: Blink the builtin LED as a heartbeat indicator
+    if (builtin_led_timer_ > LED_BLINK_INTERVAL_MS) {
+      builtin_led_timer_ = 0;
+      builtin_led_state = !builtin_led_state;
+      digitalWrite(LED_BUILTIN, builtin_led_state);
+    }
+
     switch (state_) {
 
     case IDLE: {
-      if (!wifiIsConnected()) {
+      if (!checkWifi()) {
         state_ = COLLECTING_DATA;
         led_->setColor(0, led_->BYTE_MAX, 0);
         dataStorage_->logInfo("Starting data collection for new trip",
                               gps_->timeString());
       }
+
       if (backupFiles.size() > 0) {
         uploadBackups(backupFiles);
       }
@@ -359,7 +377,6 @@ void BikeSense::run() {
     } break;
 
     case COLLECTING_DATA: {
-      gps_->update();
       SensorReading sensorData = readSensors();
 
       if (!gps_->isValid() || gps_->isOld()) {
@@ -369,9 +386,13 @@ void BikeSense::run() {
         break;
       }
 
-      checkWifi();
+      if (checkWifi()) {
+        state_ = UPLOADING_DATA;
+        break;
+      }
 
       if (!gps_->isUpdated()) {
+        led_->setColor(0, led_->BYTE_MAX, led_->BYTE_MAX);
         break;
       }
 
@@ -393,7 +414,6 @@ void BikeSense::run() {
     } break;
 
     case NO_GPS: {
-      gps_->update();
       SensorReading sensorData = readSensors();
 
       if (gps_->isValid() && !gps_->isOld()) {
@@ -403,16 +423,20 @@ void BikeSense::run() {
                               gps_->timeString());
       }
 
-      checkWifi();
+      if (checkWifi()) {
+        state_ = UPLOADING_DATA;
+        break;
+      }
     } break;
 
     case UPLOADING_DATA: {
-      led_->setColor(0, 0, led_->BYTE_MAX);
-
       if (!dataStorage_->hasData(dataStorage_->DATAFILE)) {
         state_ = IDLE;
+        led_->setColor(led_->BYTE_MAX, led_->BYTE_MAX, led_->BYTE_MAX);
         break;
       }
+
+      led_->setColor(0, 0, led_->BYTE_MAX);
 
       std::string wifiMsg =
           "Connected to WiFi: " + std::string(WiFi.SSID().c_str());
@@ -440,7 +464,6 @@ void BikeSense::run() {
       state_ = IDLE;
     } break;
 
-    // TODO: handle this better
     case ERROR: {
       led_->setColor(led_->BYTE_MAX, 0, 0);
       dataStorage_->logError("Rebooting device due to error...",
@@ -449,19 +472,6 @@ void BikeSense::run() {
     } break;
     }
 
-    // NOTE: Blink the builtin LED as a heartbeat indicator
-    if (builtin_led_timer_ > LED_BLINK_INTERVAL_MS) {
-      builtin_led_timer_ = 0;
-      builtin_led_state = !builtin_led_state;
-      digitalWrite(LED_BUILTIN, builtin_led_state);
-    }
-
     sleep_ms(1);
   }
 }
-
-// TODO: - Store relevant data in order to do automatic
-//         upload retries for failed uploads for a certain
-//         trip.
-//       - Dump data to backup storage in case of failed
-//         uploads and retry later (when in idle mode i.e.)
