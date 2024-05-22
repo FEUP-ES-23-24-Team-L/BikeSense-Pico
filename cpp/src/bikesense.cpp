@@ -263,7 +263,7 @@ void BikeSense::run() {
       } else {
         led_->setColor(led_->BYTE_MAX, 0, 0);
         digitalWrite(LED_BUILTIN, LOW);
-        Serial.println("GPS data is invalid, skipping sensor readings");
+        // Serial.println("GPS data is invalid, skipping sensor readings");
       }
 
       if (wifi_retry_timer_ < WIFI_RETRY_INTERVAL_MS) {
