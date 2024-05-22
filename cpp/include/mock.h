@@ -25,7 +25,7 @@ private:
 public:
   bool setup() override;
   bool store(const std::string reading) override;
-  retrievedData retrieve(int batchSize) override;
+  retrievedData retrieve(std::string filename, int batchSize) override;
 };
 
 #endif

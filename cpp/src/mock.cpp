@@ -42,7 +42,7 @@ bool MockDataStorage::store(const std::string reading) {
   return true;
 }
 
-retrievedData MockDataStorage::retrieve(int batchSize) {
+retrievedData MockDataStorage::retrieve(std::string _, int batchSize) {
   if (readings_.size() == 0) {
     return std::nullopt;
   }

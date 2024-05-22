@@ -37,6 +37,12 @@ bool Gps::isValid() {
 
 bool Gps::isUpdated() { return this->gps_.location.isUpdated(); }
 
+// NOTE: Only returns true if the speed is greater than 2 km/h, to avoid false
+// positives
+bool Gps::isMoving() {
+  return this->gps_.speed.isValid() && this->gps_.speed.kmph() >= 2;
+}
+
 bool Gps::isOld() {
   return this->gps_.location.age() > this->MAX_READING_AGE_MS ||
          this->gps_.altitude.age() > this->MAX_READING_AGE_MS ||

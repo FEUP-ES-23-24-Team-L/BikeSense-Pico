@@ -28,16 +28,24 @@ typedef std::optional<std::vector<std::string>> retrievedData;
 
 class DataStorageInterface {
 public:
+  std::string DATAFILE = "Bikesense.txt";
+  std::string LOGFILE = "Bikesense_Logs.txt";
+
   virtual bool setup() = 0;
 
-  virtual retrievedData retrieve(int batchSize) = 0;
-  virtual retrievedData retrieve(int batchSize, const char *filename) = 0;
+  virtual retrievedData retrieve(std::string filename, const int batchSize) = 0;
 
-  virtual bool backupTripData(const std::optional<int> trip_id) = 0;
   virtual std::vector<std::string> getBackUpFiles() const = 0;
+  virtual bool backupFile(std::string filename, const std::optional<int> tripId,
+                          const std::optional<int> failedBatchIndex) = 0;
+
+  virtual void decodeFileName(const std::string filename, int &tripId,
+                              int &batchIndex) const = 0;
+
+  virtual bool hasData(std::string filename) const = 0;
 
   virtual bool store(const std::string data) = 0;
-  virtual bool clear() = 0;
+  virtual bool clear(std::string filename) = 0;
 
   virtual bool logInfo(const std::string message) = 0;
   virtual bool logInfo(const std::string message,

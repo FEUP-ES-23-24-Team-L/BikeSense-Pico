@@ -1,6 +1,11 @@
 #include "sdCard.h"
+#include "interfaces.h"
 #include <SD.h>
 #include <SPI.h>
+#include <cstddef>
+#include <optional>
+#include <sstream>
+#include <string>
 
 bool SDCard::setup() {
   SPI.setRX(MISO_);
@@ -12,80 +17,169 @@ bool SDCard::setup() {
     return false;
   }
 
-  // TODO: is this right?
-  File logFile = SD.open(DATAFILE, FILE_WRITE);
+  File logFile = SD.open(LOGFILE.c_str(), FILE_WRITE);
   if (!logFile) {
-    Serial.println("Error opening log file!");
+    Serial.println("Failed to open log file!");
     return false;
   }
 
-  if (logFile.size() > LOGFILE_MAX_SIZE && !logFile.truncate(0)) {
-    Serial.println("Error truncating log file!");
+  if (logFile.size() > LOGFILE_MAX_SIZE) {
+    Serial.println("Log file size exceeded, clearing log file");
     logFile.close();
-    return false;
-  }
 
-  logFile.close();
+    if (!clear(LOGFILE)) {
+      Serial.println("Failed to clear log file");
+      return false;
+    }
+  } else
+    logFile.close();
+
+  if (SD.exists(DATAFILE.c_str())) {
+    File file = SD.open(DATAFILE.c_str(), FILE_READ);
+    if (!file) {
+      logError("Failed to open data file");
+      return false;
+    }
+
+    if (file.size() > 0) {
+      logInfo("Data file exists, backing up to prepare for new trip");
+      file.close();
+
+      if (!backupFile(DATAFILE, std::nullopt, std::nullopt)) {
+        return false;
+      }
+
+      SD.remove(DATAFILE.c_str());
+    } else {
+      file.close();
+    }
+  }
 
   return true;
 }
 
+bool SDCard::hasData(std::string filename) const {
+  if (!SD.exists(filename.c_str())) {
+    return false;
+  }
+
+  File file = SD.open(filename.c_str(), FILE_READ);
+  if (!file) {
+    return false;
+  }
+
+  size_t size = file.size();
+  file.close();
+  return size > 0;
+}
+
 bool SDCard::store(const std::string data) {
-  File f = SD.open(DATAFILE, FILE_WRITE);
-  if (f) {
-    f.println(data.c_str());
-    Serial.println("Data stored successfully");
-  } else {
+  File f = SD.open(DATAFILE.c_str(), FILE_WRITE);
+  if (!f) {
     Serial.println("Error opening file for writing");
     return false;
   }
+
+  f.println(data.c_str());
   f.close();
   return true;
 }
 
-bool SDCard::backupTripData(const std::optional<int> trip_id) {
-  File f = SD.open(DATAFILE, FILE_READ);
+bool SDCard::backupFile(std::string filename, const std::optional<int> tripID,
+                        const std::optional<int> failedBatchIndex) {
+  File f = SD.open(filename.c_str(), FILE_READ);
   if (!f)
     return false;
+  f.close();
 
-  std::string backupFile = "BikesenseBackup" + std::to_string(millis());
-  if (trip_id.has_value()) {
-    backupFile += "-" + std::to_string(trip_id.value());
+  if (!SD.exists("backups")) {
+    if (!SD.mkdir("backups")) {
+      logError("Error creating backups directory");
+      return false;
+    }
+  }
+
+  std::string backupDIR = "backups";
+  std::string backupFile = "/bikesense" + std::to_string(millis());
+  if (tripID.has_value()) {
+    backupFile += "-" + std::to_string(tripID.value());
+  }
+  if (failedBatchIndex.has_value()) {
+    backupFile += "-" + std::to_string(failedBatchIndex.value());
   }
   backupFile += ".txt";
-  std::string backupDIR = "/backup/" + backupFile;
 
-  return SD.rename(DATAFILE, (backupDIR + backupFile).c_str());
+  logInfo("Backing up trip data to " + backupDIR + backupFile);
+  if (!SD.rename(filename.c_str(), (backupDIR + backupFile).c_str())) {
+    logError("Error renaming file trip data");
+    return false;
+  }
+
+  return true;
+}
+
+void SDCard::decodeFileName(const std::string filename, int &tripId,
+                            int &batchIndex) const {
+  // Split filename by '-'
+  std::istringstream ss(filename);
+  char delimiter = '-';
+
+  std::vector<std::string> parts;
+  std::string part;
+
+  while (std::getline(ss, part, delimiter)) {
+    parts.push_back(part);
+  }
+
+  if (parts.size() == 2) {
+    tripId = std::stoi(parts[1]);
+    batchIndex = -1;
+  } else if (parts.size() == 3) {
+    tripId = std::stoi(parts[1]);
+    batchIndex = std::stoi(parts[2]);
+  } else {
+    tripId = -1;
+    batchIndex = -1;
+  }
 }
 
 std::vector<std::string> SDCard::getBackUpFiles() const {
   std::vector<std::string> backupFiles;
-  File root = SD.open("/backup/");
-  File file = root.openNextFile();
-  while (file) {
-    if (file.isDirectory()) {
-      file = root.openNextFile();
+  std::string dirname = "backups";
+  File dir = SD.open(dirname.c_str());
+  while (true) {
+    File file = dir.openNextFile();
+    if (!file) {
+      break;
+    }
+
+    if (file.isDirectory() || file.size() == 0) {
+      file.close();
       continue;
     }
 
-    backupFiles.push_back(file.name());
-    file = root.openNextFile();
+    std::string fullPath = dirname + "/" + file.name();
+    backupFiles.push_back(fullPath.c_str());
+    file.close();
   }
+
+  dir.close();
   return backupFiles;
 }
 
-retrievedData SDCard::retrieve(int batchSize) {
-  return retrieve(batchSize, DATAFILE);
-}
-
-retrievedData SDCard::retrieve(int batchSize, const char *filename) {
-  static std::map<const char *, int> lastReadPositions;
+retrievedData SDCard::retrieve(std::string filename_, int batchSize) {
+  static std::map<std::string, int> lastReadPositions;
+  std::string filename = std::string(filename_);
   if (lastReadPositions.find(filename) == lastReadPositions.end()) {
+    Serial.printf("Initializing last read position for file %s\n",
+                  filename.c_str());
     lastReadPositions[filename] = 0;
   }
   int lastReadPosition = lastReadPositions[filename];
+  Serial.printf("Last read position for file %s is %d\n", filename.c_str(),
+                lastReadPosition);
 
-  File f = SD.open(filename, FILE_READ);
+  File f = SD.open(filename.c_str(), FILE_READ);
   if (!f) {
     return std::nullopt;
   }
@@ -93,6 +187,7 @@ retrievedData SDCard::retrieve(int batchSize, const char *filename) {
   if (f.position() >= f.size()) {
     lastReadPosition = 0;
     this->logInfo("End of file reached, resetting read position");
+    f.close();
     return std::nullopt;
   }
 
@@ -113,18 +208,24 @@ retrievedData SDCard::retrieve(int batchSize, const char *filename) {
   }
 
   if (data.empty()) {
+    f.close();
     return std::nullopt;
   }
 
+  Serial.printf("Last read position for file %s is now %d\n", filename.c_str(),
+                f.position());
   lastReadPositions[filename] = f.position();
   f.close();
   return data;
 }
 
-bool SDCard::clear() {
-  if (SD.exists(DATAFILE)) {
-    SD.remove(DATAFILE);
-    return true;
+bool SDCard::clear(std::string filename) {
+  if (SD.exists(filename.c_str())) {
+    if (SD.remove(filename.c_str())) {
+      logInfo("File " + std::string(filename) + " cleared successfully");
+      return true;
+    }
+    logError("Error clearing file " + std::string(filename));
   }
 
   return false;
@@ -139,8 +240,10 @@ bool SDCard::logInfo(const std::string message) {
 }
 
 bool SDCard::logInfo(const std::string message, const std::string timestamp) {
-  std::string infoMsg = "[" + std::to_string(millis()) + "] [" + timestamp +
-                        "] [INFO] " + message;
+  if (timestamp.empty()) {
+    return logInfo(message);
+  }
+  std::string infoMsg = "[" + timestamp + "] " + message;
   return logInfo(infoMsg);
 }
 
@@ -153,15 +256,17 @@ bool SDCard::logError(const std::string message) {
 }
 
 bool SDCard::logError(const std::string message, const std::string timestamp) {
-  std::string errorMsg = "[" + std::to_string(millis()) + "] [" + timestamp +
-                         "] [ERROR] " + message;
+  if (timestamp.empty()) {
+    return logError(message);
+  }
+  std::string errorMsg = "[" + timestamp + "] " + message;
   return logError(errorMsg);
 }
 
 bool SDCard::log(const std::string message) {
   Serial.println(message.c_str());
 
-  File f = SD.open(LOGFILE, FILE_WRITE);
+  File f = SD.open(LOGFILE.c_str(), FILE_WRITE);
   if (!f) {
     return false;
   }

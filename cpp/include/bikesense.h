@@ -54,8 +54,12 @@ private:
   int registerAndGetID(std::string payload, std::string endpoint);
   int registerTripAndGetID();
 
-  bool uploadAllSensorData();
   int uploadData(const std::vector<std::string> &readings);
+  bool uploadTrip(std::string filename, const int tripId,
+                  const int startingBatchIndex);
+  void uploadBackups(std::vector<std::string> backupFiles);
+  bool registerAndUploadTrip(std::string filename);
+
   int saveData(const SensorReading sensorData, const SensorReading gpsData,
                const std::string timestamp);
 
