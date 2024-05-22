@@ -187,19 +187,22 @@ int BikeSense::saveData(const SensorReading sensorData,
 }
 
 bool BikeSense::uploadAllSensorData() {
+  dataStorage_->logInfo("Trying to register trip");
   int tripId_ = registerTripAndGetID();
   if (tripId_ == -1) {
     dataStorage_->logError("Failed to register trip, aborting upload");
     http_.end();
     return false;
   }
+  std::string msg = "Trip registered with id: " + std::to_string(tripId_);
+  dataStorage_->logInfo(msg);
 
   http_.begin((API_ENDPOINT + "/trip/upload_data").c_str());
   http_.addHeader("Content-Type", "application/json");
   http_.addHeader("Authorization", API_TOKEN.c_str());
   http_.addHeader("Trip-ID", String(tripId_).c_str());
 
-  dataStorage_->logInfo("Staring Data Upload");
+  dataStorage_->logInfo("Starting Bulk Data Upload");
 
   int nUploads = 0;
   retrievedData data;
@@ -219,6 +222,7 @@ bool BikeSense::uploadAllSensorData() {
       return false;
     }
     nUploads++;
+    dataStorage_->logInfo("Batch " + std::to_string(nUploads) + " uploaded");
   }
 
   http_.end();
@@ -229,24 +233,21 @@ void BikeSense::run() {
   setup();
 
   elapsedMillis wifi_retry_timer_ = WIFI_RETRY_INTERVAL_MS;
+  elapsedMillis builtin_led_timer_ = 0;
+
+  const int LED_BLINK_INTERVAL_MS = 500;
+  bool builtin_led_state = false;
+
   bool logsDumped = false;
 
   while (true) {
-
-    if (Serial.availableForWrite() && !logsDumped) {
-      dataStorage_->logDumpOverSerial();
-      logsDumped = true;
-    } else if (!Serial.availableForWrite()) {
-      logsDumped = false;
-    }
-
     switch (state_) {
 
     case IDLE: {
+      led_->setColor(led_->BYTE_MAX, led_->BYTE_MAX, led_->BYTE_MAX);
       if (!checkWifi()) {
         state_ = COLLECTING_DATA;
         dataStorage_->logInfo("Starting data collection for new trip");
-        led_->setColor(led_->BYTE_MAX, led_->BYTE_MAX, led_->BYTE_MAX);
       }
     } break;
 
@@ -257,12 +258,10 @@ void BikeSense::run() {
         led_->setColor(0, led_->BYTE_MAX, 0);
         // Wait for the GPS data to be updated
         if (gps_->isUpdated()) {
-          digitalWrite(LED_BUILTIN, HIGH);
           saveData(readSensors(), gps_->read(), gps_->timeString());
         }
       } else {
-        led_->setColor(led_->BYTE_MAX, 0, 0);
-        digitalWrite(LED_BUILTIN, LOW);
+        led_->setColor(led_->BYTE_MAX, led_->BYTE_MAX, 0);
         // Serial.println("GPS data is invalid, skipping sensor readings");
       }
 
@@ -272,11 +271,11 @@ void BikeSense::run() {
       wifi_retry_timer_ = 0;
 
       Serial.println("Checking for known wifi connections");
-      if (checkWifi()) {
+      if (checkWifi())
         state_ = UPLOADING_DATA;
-        Serial.printf("Wifi offline, retrying in %ds\n",
-                      WIFI_RETRY_INTERVAL_MS / 1000);
-      }
+
+      Serial.printf("Wifi offline, retrying in %ds\n",
+                    WIFI_RETRY_INTERVAL_MS / 1000);
 
     } break;
 
@@ -308,6 +307,13 @@ void BikeSense::run() {
     } break;
     }
 
+    // NOTE: Blink the builtin LED as a heartbeat indicator
+    if (builtin_led_timer_ > LED_BLINK_INTERVAL_MS) {
+      builtin_led_timer_ = 0;
+      builtin_led_state = !builtin_led_state;
+      digitalWrite(LED_BUILTIN, builtin_led_state);
+    }
+
     sleep_ms(1);
   }
 }
@@ -319,4 +325,3 @@ void BikeSense::run() {
 //         uploads and retry later (when in idle mode i.e.)
 //       - Implement a watchdog timer to reboot the device (?)
 //       - Brainstorm about improving trip start/end detection
-

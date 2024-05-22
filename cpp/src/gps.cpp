@@ -5,7 +5,7 @@
 #include <iomanip>
 #include <sstream>
 
-// #define GPS_DEBUG
+#define GPS_DEBUG
 
 void Gps::setup() { Serial1.begin(9600); }
 
@@ -14,13 +14,13 @@ void Gps::update() {
     char c = Serial1.read();
     if (c == '\n') {
       for (int i = 0; i < this->bufferIndex_; i++) {
-#ifdef GPS_DEBUG: 
+#ifdef GPS_DEBUG
         Serial.write(this->buffer_[i]);
 #endif
         this->gps_.encode(this->buffer_[i]);
       }
       this->bufferIndex_ = 0;
-#ifdef GPS_DEBUG:
+#ifdef GPS_DEBUG
       Serial.println();
 #endif
       break;
