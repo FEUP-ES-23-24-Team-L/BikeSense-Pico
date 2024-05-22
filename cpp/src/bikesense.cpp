@@ -253,7 +253,7 @@ void BikeSense::run() {
     case COLLECTING_DATA: {
       gps_->update();
 
-      if (gps_->isValid()) {
+      if (gps_->isValid() && !gps_->isOld()) {
         led_->setColor(0, led_->BYTE_MAX, 0);
         // Wait for the GPS data to be updated
         if (gps_->isUpdated()) {
@@ -319,3 +319,4 @@ void BikeSense::run() {
 //         uploads and retry later (when in idle mode i.e.)
 //       - Implement a watchdog timer to reboot the device (?)
 //       - Brainstorm about improving trip start/end detection
+

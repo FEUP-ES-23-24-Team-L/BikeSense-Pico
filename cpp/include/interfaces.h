@@ -16,6 +16,7 @@ class GpsInterface : public SensorInterface {
 public:
   virtual void update() = 0;
   virtual bool isValid() = 0;
+  virtual bool isOld() = 0;
   virtual bool isUpdated() = 0;
   virtual std::string timeString() = 0;
 };

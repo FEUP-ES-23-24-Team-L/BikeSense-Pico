@@ -37,6 +37,13 @@ bool Gps::isValid() {
 
 bool Gps::isUpdated() { return this->gps_.location.isUpdated(); }
 
+bool Gps::isOld() {
+  return this->gps_.location.age() > this->MAX_READING_AGE_MS ||
+         this->gps_.altitude.age() > this->MAX_READING_AGE_MS ||
+         this->gps_.time.age() > this->MAX_READING_AGE_MS ||
+         this->gps_.date.age() > this->MAX_READING_AGE_MS;
+}
+
 SensorReading Gps::read() {
   SensorReading gpsRead =
       SensorReading()
