@@ -12,6 +12,7 @@ bool SDCard::setup() {
     return false;
   }
 
+  // TODO: is this right?
   File logFile = SD.open(DATAFILE, FILE_WRITE);
   if (!logFile) {
     Serial.println("Error opening log file!");
@@ -33,7 +34,9 @@ bool SDCard::store(const std::string data) {
   File f = SD.open(DATAFILE, FILE_WRITE);
   if (f) {
     f.println(data.c_str());
+    Serial.println("Data stored successfully");
   } else {
+    Serial.println("Error opening file for writing");
     return false;
   }
   f.close();
@@ -78,18 +81,13 @@ retrievedData SDCard::retrieve(int batchSize) {
 }
 
 bool SDCard::clear() {
-  File f = SD.open(DATAFILE, FILE_WRITE);
-  if (!f) {
-    return false;
+
+  if (SD.exists(DATAFILE)){
+    SD.remove(DATAFILE);
+    return true;
   }
 
-  if (!f.truncate(0)) {
-    f.close();
-    return false;
-  }
-
-  f.close();
-  return true;
+  return false;
 }
 
 bool SDCard::logInfo(const std::string message) {
