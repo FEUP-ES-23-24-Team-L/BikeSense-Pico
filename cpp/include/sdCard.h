@@ -3,6 +3,8 @@
 
 #include <SD.h>
 #include <SPI.h>
+#include <string>
+#include <vector>
 
 #include "interfaces.h"
 
@@ -18,14 +20,17 @@ private:
 
   const int LOGFILE_MAX_SIZE = 1000000; // 1MB
 
-  size_t lastReadPosition_ = 0;
-
   bool log(const std::string message);
 
 public:
   bool setup() override;
 
   retrievedData retrieve(int batchSize) override;
+  retrievedData retrieve(int batchSize, const char *filename) override;
+
+  bool backupTripData(const std::optional<int> trip_id) override;
+  std::vector<std::string> getBackUpFiles() const override;
+
   bool store(const std::string data) override;
   bool clear() override;
 

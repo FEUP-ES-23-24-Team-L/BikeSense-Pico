@@ -68,6 +68,10 @@ SensorReading Gps::read() {
 }
 
 std::string Gps::timeString() {
+  if (!this->gps_.time.isValid() || !this->gps_.date.isValid()) {
+    return "";
+  }
+
   uint16_t year = this->gps_.date.year();
   uint8_t month = this->gps_.date.month();
   uint8_t day = this->gps_.date.day();

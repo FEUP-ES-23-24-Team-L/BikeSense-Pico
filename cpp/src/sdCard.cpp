@@ -43,25 +43,66 @@ bool SDCard::store(const std::string data) {
   return true;
 }
 
-retrievedData SDCard::retrieve(int batchSize) {
+bool SDCard::backupTripData(const std::optional<int> trip_id) {
   File f = SD.open(DATAFILE, FILE_READ);
+  if (!f)
+    return false;
+
+  std::string backupFile = "BikesenseBackup" + std::to_string(millis());
+  if (trip_id.has_value()) {
+    backupFile += "-" + std::to_string(trip_id.value());
+  }
+  backupFile += ".txt";
+  std::string backupDIR = "/backup/" + backupFile;
+
+  return SD.rename(DATAFILE, (backupDIR + backupFile).c_str());
+}
+
+std::vector<std::string> SDCard::getBackUpFiles() const {
+  std::vector<std::string> backupFiles;
+  File root = SD.open("/backup/");
+  File file = root.openNextFile();
+  while (file) {
+    if (file.isDirectory()) {
+      file = root.openNextFile();
+      continue;
+    }
+
+    backupFiles.push_back(file.name());
+    file = root.openNextFile();
+  }
+  return backupFiles;
+}
+
+retrievedData SDCard::retrieve(int batchSize) {
+  return retrieve(batchSize, DATAFILE);
+}
+
+retrievedData SDCard::retrieve(int batchSize, const char *filename) {
+  static std::map<const char *, int> lastReadPositions;
+  if (lastReadPositions.find(filename) == lastReadPositions.end()) {
+    lastReadPositions[filename] = 0;
+  }
+  int lastReadPosition = lastReadPositions[filename];
+
+  File f = SD.open(filename, FILE_READ);
   if (!f) {
     return std::nullopt;
   }
 
   if (f.position() >= f.size()) {
-    lastReadPosition_ = 0;
+    lastReadPosition = 0;
     this->logInfo("End of file reached, resetting read position");
     return std::nullopt;
   }
 
   if (f.size() == 0) {
     f.close();
-    lastReadPosition_ = 0;
+    lastReadPosition = 0;
     return std::nullopt;
   }
 
-  f.seek(lastReadPosition_);
+  f.seek(lastReadPosition);
   std::vector<std::string> data;
   for (int i = 0; i < batchSize; i++) {
     if (f.available()) {
@@ -75,7 +116,7 @@ retrievedData SDCard::retrieve(int batchSize) {
     return std::nullopt;
   }
 
-  lastReadPosition_ = f.position();
+  lastReadPositions[filename] = f.position();
   f.close();
   return data;
 }

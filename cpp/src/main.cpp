@@ -1,13 +1,15 @@
+#include <Arduino.h>
+#include <pico/unique_id.h>
+
+#include "bikesense.h"
+#include "gps.h"
 #include "infoLed.h"
 #include "light.h"
-#include "pico/unique_id.h"
+#include "mq2.h"
+#include "mq7.h"
+#include "noise.h"
+#include "sdCard.h"
 #include "tempHumidity.h"
-#include <Arduino.h>
-#include <bikesense.h>
-#include <gps.h>
-#include <mock.h>
-#include <noise.h>
-#include <sdCard.h>
 
 #define SERIAL_BAUD 115200
 
@@ -47,12 +49,13 @@ void loop() {
   digitalWrite(LED_BUILTIN, HIGH);
 
   BikeSenseBuilder()
-      .addSensor(new MockSensor())
       .addSensor(new NoiseSensor())
       .addSensor(new LightSensor())
       .addSensor(new TempHumiditySensor())
-      .addGps(new Gps())
+      .addSensor(new MQ2GasSensor())
+      .addSensor(new MQ7GasSensor())
       .addDataStorage(new SDCard())
+      .addGps(new Gps())
       .addLed(new InfoLed())
       .whoAmI(BIKE_CODE, id)
       .withApiConfig(API_TOKEN, API_ENDPOINT)

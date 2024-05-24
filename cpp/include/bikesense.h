@@ -51,8 +51,6 @@ private:
   void setup();
   SensorReading readSensors() const;
 
-  inline bool checkWifi();
-
   int registerAndGetID(std::string payload, std::string endpoint);
   int registerTripAndGetID();
 

@@ -4,6 +4,7 @@
 #include <sensorReading.h>
 
 #include <Arduino.h>
+#include <optional>
 #include <vector>
 
 class SensorInterface {
@@ -14,10 +15,12 @@ public:
 
 class GpsInterface : public SensorInterface {
 public:
+  virtual bool isOld() = 0;
   virtual void update() = 0;
   virtual bool isValid() = 0;
-  virtual bool isOld() = 0;
+  virtual bool isMoving() = 0;
   virtual bool isUpdated() = 0;
+
   virtual std::string timeString() = 0;
 };
 
@@ -28,6 +31,11 @@ public:
   virtual bool setup() = 0;
 
   virtual retrievedData retrieve(int batchSize) = 0;
+  virtual retrievedData retrieve(int batchSize, const char *filename) = 0;
+
+  virtual bool backupTripData(const std::optional<int> trip_id) = 0;
+  virtual std::vector<std::string> getBackUpFiles() const = 0;
+
   virtual bool store(const std::string data) = 0;
   virtual bool clear() = 0;
 

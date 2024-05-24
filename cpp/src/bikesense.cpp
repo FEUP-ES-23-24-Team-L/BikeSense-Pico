@@ -105,8 +105,6 @@ SensorReading BikeSense::readSensors() const {
   return readings;
 }
 
-inline bool BikeSense::checkWifi() { return multi_.run() == WL_CONNECTED; }
-
 int BikeSense::registerAndGetID(std::string payload, std::string endpoint) {
   http_.begin((API_ENDPOINT + endpoint).c_str());
   http_.addHeader("Content-Type", "application/json");
@@ -114,28 +112,29 @@ int BikeSense::registerAndGetID(std::string payload, std::string endpoint) {
 
   const int nRetries = 5;
 
-  dataStorage_->logInfo("Posting " + payload + " to " + endpoint);
+  dataStorage_->logInfo("Posting " + payload + " to " + endpoint,
+                        gps_->timeString());
 
   int httpCode;
   for (int rt = 0; rt < nRetries; rt++) {
     httpCode = http_.POST(payload.c_str());
     std::string msg = "Post code: " + std::to_string(httpCode) + " (attempt " +
                       std::to_string(rt) + ")";
-    dataStorage_->logInfo(msg);
+    dataStorage_->logInfo(msg, gps_->timeString());
     if (httpCode == HTTP_CODE_CREATED || httpCode == HTTP_CODE_OK)
       break;
   }
 
   if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_CREATED) {
     std::string errorMsg = "Failed to register " + endpoint;
-    dataStorage_->logError(errorMsg);
+    dataStorage_->logError(errorMsg, gps_->timeString());
 
     std::string httpError = http_.errorToString(httpCode).c_str();
-    dataStorage_->logError(httpError);
+    dataStorage_->logError(httpError, gps_->timeString());
 
     const String msg = http_.getString();
     if (msg != nullptr)
-      dataStorage_->logError(msg.c_str());
+      dataStorage_->logError(msg.c_str(), gps_->timeString());
 
     http_.end();
     return -1;
@@ -201,27 +200,32 @@ int BikeSense::saveData(const SensorReading sensorData,
 }
 
 bool BikeSense::uploadAllSensorData() {
-  dataStorage_->logInfo("Sleeping for wifi shenanigans");
+  dataStorage_->logInfo("Wifi sleep interval", gps_->timeString());
   sleep_ms(3000);
 
   http_.begin((API_ENDPOINT + "/check_health").c_str());
   int httpCode = http_.GET();
-  dataStorage_->logInfo(http_.errorToString(httpCode).c_str());
+  dataStorage_->logInfo(http_.errorToString(httpCode).c_str(),
+                        gps_->timeString());
   http_.end();
 
-  dataStorage_->logInfo("Trying to register trip");
+  dataStorage_->logInfo("Trying to register trip", gps_->timeString());
   int tripId_ = registerTripAndGetID();
   if (tripId_ == -1) {
-    dataStorage_->logError("Failed to register trip, aborting upload");
+    dataStorage_->logError("Failed to register trip, aborting upload",
+                           gps_->timeString());
+    dataStorage_->backupTripData(std::nullopt);
     http_.end();
     return false;
   }
-  std::string msg = "Trip registered with id: " + std::to_string(tripId_);
-  dataStorage_->logInfo(msg);
 
-  dataStorage_->logInfo("Starting Bulk Data Upload");
+  std::string msg = "Trip registered with id: " + std::to_string(tripId_);
+  dataStorage_->logInfo(msg, gps_->timeString());
+
+  dataStorage_->logInfo("Starting Bulk Data Upload", gps_->timeString());
   int nUploads = 1;
   retrievedData data;
+
   while (data = dataStorage_->retrieve(UPLOAD_BATCH_SIZE), data.has_value()) {
     http_.begin((API_ENDPOINT + "/trip/upload_data").c_str());
     http_.addHeader("Content-Type", "application/json");
@@ -230,19 +234,23 @@ bool BikeSense::uploadAllSensorData() {
 
     int httpCode = uploadData(data.value());
     if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_CREATED) {
-
       std::string errorMsg =
           "HTTP post failed after " + std::to_string(nUploads) + " batches";
       std::string httpError = http_.errorToString(httpCode).c_str();
       std::string response = http_.getString().c_str();
-      dataStorage_->logError(errorMsg);
-      dataStorage_->logError(httpError);
-      dataStorage_->logError(response);
+
+      dataStorage_->logError(errorMsg, gps_->timeString());
+      dataStorage_->logError(httpError, gps_->timeString());
+      dataStorage_->logError(response, gps_->timeString());
+
+      dataStorage_->backupTripData(tripId_);
 
       http_.end();
       return false;
     }
-    dataStorage_->logInfo("Batch " + std::to_string(nUploads) + " uploaded");
+
+    dataStorage_->logInfo("Batch " + std::to_string(nUploads) + " uploaded",
+                          gps_->timeString());
     http_.end();
     nUploads++;
   }
@@ -253,7 +261,11 @@ bool BikeSense::uploadAllSensorData() {
 void BikeSense::run() {
   setup();
 
+  const int MOVE_READ_INTERVAL_MS = 1000;
+  const int STATIONARY_READ_INTERVAL_MS = 60000; // 1 minute
+
   elapsedMillis wifi_retry_timer_ = WIFI_RETRY_INTERVAL_MS;
+  elapsedMillis sensor_read_timer_ = 0;
   elapsedMillis builtin_led_timer_ = 0;
 
   const int LED_BLINK_INTERVAL_MS = 500;
@@ -261,54 +273,78 @@ void BikeSense::run() {
 
   bool logsDumped = false;
 
+  auto wifiIsConnected = [this]() { return multi_.run() == WL_CONNECTED; };
+  auto checkWifi = [this, wifiIsConnected, &wifi_retry_timer_]() {
+    if (wifi_retry_timer_ < WIFI_RETRY_INTERVAL_MS)
+      return;
+
+    wifi_retry_timer_ = 0;
+
+    Serial.println("Checking for known wifi connections");
+    if (!wifiIsConnected())
+      Serial.printf("Wifi offline, retrying in %ds\n",
+                    WIFI_RETRY_INTERVAL_MS / 1000);
+    else
+      this->state_ = UPLOADING_DATA;
+  };
+
   while (true) {
     switch (state_) {
 
     case IDLE: {
       led_->setColor(led_->BYTE_MAX, led_->BYTE_MAX, led_->BYTE_MAX);
-      if (!checkWifi()) {
+      if (!wifiIsConnected()) {
         state_ = COLLECTING_DATA;
-        dataStorage_->logInfo("Starting data collection for new trip");
+        led_->setColor(0, led_->BYTE_MAX, 0);
+        dataStorage_->logInfo("Starting data collection for new trip",
+                              gps_->timeString());
       }
     } break;
 
     case COLLECTING_DATA: {
       gps_->update();
+      SensorReading sensorData = readSensors();
 
       if (!gps_->isValid() || gps_->isOld()) {
         state_ = NO_GPS;
-        dataStorage_->logError("GPS signal lost");
+        led_->setColor(led_->BYTE_MAX, led_->BYTE_MAX, 0);
+        dataStorage_->logError("GPS signal lost", gps_->timeString());
         break;
       }
 
-      led_->setColor(0, led_->BYTE_MAX, 0);
-      // Wait for the GPS data to be updated
       if (gps_->isUpdated()) {
-        saveData(readSensors(), gps_->read(), gps_->timeString());
+        if (gps_->isMoving() && sensor_read_timer_ > MOVE_READ_INTERVAL_MS) {
+          sensor_read_timer_ = 0;
+          led_->setColor(0, led_->BYTE_MAX, 0);
+          saveData(sensorData, gps_->read(), gps_->timeString());
+        } else if (sensor_read_timer_ > STATIONARY_READ_INTERVAL_MS) {
+          sensor_read_timer_ = 0;
+          led_->setColor(0, led_->BYTE_MAX, led_->BYTE_MAX);
+          saveData(sensorData, gps_->read(), gps_->timeString());
+        }
       }
 
-      if (wifi_retry_timer_ < WIFI_RETRY_INTERVAL_MS) {
-        break;
+      if (!gps_->isMoving()) {
+        led_->setColor(0, led_->BYTE_MAX, led_->BYTE_MAX);
+        dataStorage_->logInfo("Bike is stationary, slowing data collection",
+                              gps_->timeString());
       }
-      wifi_retry_timer_ = 0;
 
-      Serial.println("Checking for known wifi connections");
-      if (checkWifi())
-        state_ = UPLOADING_DATA;
-
-      Serial.printf("Wifi offline, retrying in %ds\n",
-                    WIFI_RETRY_INTERVAL_MS / 1000);
-
+      checkWifi();
     } break;
 
     case NO_GPS: {
       gps_->update();
-      led_->setColor(led_->BYTE_MAX, led_->BYTE_MAX, 0);
+      SensorReading sensorData = readSensors();
+
       if (gps_->isValid() && !gps_->isOld()) {
         state_ = COLLECTING_DATA;
-        dataStorage_->logInfo("GPS signal acquired, resuming data collection");
+        led_->setColor(0, led_->BYTE_MAX, 0);
+        dataStorage_->logInfo("GPS signal acquired, resuming data collection",
+                              gps_->timeString());
       }
 
+      checkWifi();
     } break;
 
     case UPLOADING_DATA: {
@@ -317,16 +353,18 @@ void BikeSense::run() {
       std::string wifiMsg =
           "Connected to WiFi: " + std::string(WiFi.SSID().c_str());
       std::string endpointMsg = "Uploading data to " + API_ENDPOINT;
-      dataStorage_->logInfo(wifiMsg);
-      dataStorage_->logInfo(endpointMsg);
+      dataStorage_->logInfo(wifiMsg, gps_->timeString());
+      dataStorage_->logInfo(endpointMsg, gps_->timeString());
 
       int success = uploadAllSensorData();
       if (success) {
         state_ = IDLE;
-        dataStorage_->logInfo("Data upload successful, clearing storage");
+        dataStorage_->logInfo("Data upload successful, clearing storage",
+                              gps_->timeString());
         dataStorage_->clear();
       } else {
-        dataStorage_->logError("Failed to upload data, going into error mode");
+        dataStorage_->logError("Failed to upload data, going into error mode",
+                               gps_->timeString());
         state_ = ERROR;
       }
     } break;
@@ -334,7 +372,8 @@ void BikeSense::run() {
     // TODO: handle this better
     case ERROR: {
       led_->setColor(led_->BYTE_MAX, 0, 0);
-      dataStorage_->logError("Rebooting device due to error...");
+      dataStorage_->logError("Rebooting device due to error...",
+                             gps_->timeString());
       rp2040.reboot();
     } break;
     }
