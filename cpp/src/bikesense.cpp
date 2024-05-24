@@ -275,15 +275,16 @@ void BikeSense::run() {
     case COLLECTING_DATA: {
       gps_->update();
 
-      if (gps_->isValid() && !gps_->isOld()) {
-        led_->setColor(0, led_->BYTE_MAX, 0);
-        // Wait for the GPS data to be updated
-        if (gps_->isUpdated()) {
-          saveData(readSensors(), gps_->read(), gps_->timeString());
-        }
-      } else {
-        led_->setColor(led_->BYTE_MAX, led_->BYTE_MAX, 0);
-        // Serial.println("GPS data is invalid, skipping sensor readings");
+      if (!gps_->isValid() || gps_->isOld()) {
+        state_ = NO_GPS;
+        dataStorage_->logError("GPS signal lost");
+        break;
+      }
+
+      led_->setColor(0, led_->BYTE_MAX, 0);
+      // Wait for the GPS data to be updated
+      if (gps_->isUpdated()) {
+        saveData(readSensors(), gps_->read(), gps_->timeString());
       }
 
       if (wifi_retry_timer_ < WIFI_RETRY_INTERVAL_MS) {
@@ -297,6 +298,16 @@ void BikeSense::run() {
 
       Serial.printf("Wifi offline, retrying in %ds\n",
                     WIFI_RETRY_INTERVAL_MS / 1000);
+
+    } break;
+
+    case NO_GPS: {
+      gps_->update();
+      led_->setColor(led_->BYTE_MAX, led_->BYTE_MAX, 0);
+      if (gps_->isValid() && !gps_->isOld()) {
+        state_ = COLLECTING_DATA;
+        dataStorage_->logInfo("GPS signal acquired, resuming data collection");
+      }
 
     } break;
 

@@ -32,8 +32,12 @@ public:
   virtual bool clear() = 0;
 
   virtual bool logInfo(const std::string message) = 0;
+  virtual bool logInfo(const std::string message,
+                       const std::string timestamp) = 0;
+
   virtual bool logError(const std::string message) = 0;
-  virtual bool logDumpOverSerial() = 0;
+  virtual bool logError(const std::string message,
+                        const std::string timestamp) = 0;
 };
 
 class LedInterface {

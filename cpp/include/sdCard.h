@@ -20,6 +20,8 @@ private:
 
   size_t lastReadPosition_ = 0;
 
+  bool log(const std::string message);
+
 public:
   bool setup() override;
 
@@ -28,8 +30,11 @@ public:
   bool clear() override;
 
   bool logInfo(const std::string message) override;
+  bool logInfo(const std::string message, const std::string timestamp) override;
+
   bool logError(const std::string message) override;
-  bool logDumpOverSerial() override;
+  bool logError(const std::string message,
+                const std::string timestamp) override;
 };
 
 #endif

@@ -81,8 +81,7 @@ retrievedData SDCard::retrieve(int batchSize) {
 }
 
 bool SDCard::clear() {
-
-  if (SD.exists(DATAFILE)){
+  if (SD.exists(DATAFILE)) {
     SD.remove(DATAFILE);
     return true;
   }
@@ -95,14 +94,13 @@ bool SDCard::logInfo(const std::string message) {
       "[" + std::to_string(millis()) + "] " + "[INFO] " + message;
   Serial.println(infoMsg.c_str());
 
-  File f = SD.open(LOGFILE, FILE_WRITE);
-  if (!f) {
-    return false;
-  }
-  f.println(infoMsg.c_str());
-  f.close();
+  return log(infoMsg);
+}
 
-  return true;
+bool SDCard::logInfo(const std::string message, const std::string timestamp) {
+  std::string infoMsg = "[" + std::to_string(millis()) + "] [" + timestamp +
+                        "] [INFO] " + message;
+  return logInfo(infoMsg);
 }
 
 bool SDCard::logError(const std::string message) {
@@ -110,26 +108,23 @@ bool SDCard::logError(const std::string message) {
       "[" + std::to_string(millis()) + "] " + "[ERROR] " + message;
   Serial.println(errorMsg.c_str());
 
+  return log(errorMsg);
+}
+
+bool SDCard::logError(const std::string message, const std::string timestamp) {
+  std::string errorMsg = "[" + std::to_string(millis()) + "] [" + timestamp +
+                         "] [ERROR] " + message;
+  return logError(errorMsg);
+}
+
+bool SDCard::log(const std::string message) {
+  Serial.println(message.c_str());
+
   File f = SD.open(LOGFILE, FILE_WRITE);
   if (!f) {
     return false;
   }
-  f.println(errorMsg.c_str());
+  f.println(message.c_str());
   f.close();
-
-  return true;
-}
-
-bool SDCard::logDumpOverSerial() {
-  File f = SD.open(LOGFILE, FILE_READ);
-  if (!f) {
-    return false;
-  }
-
-  while (f.available()) {
-    Serial.println(f.readStringUntil('\n').c_str());
-  }
-  f.close();
-
   return true;
 }

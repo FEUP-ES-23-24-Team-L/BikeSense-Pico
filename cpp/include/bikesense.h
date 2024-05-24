@@ -16,6 +16,7 @@ typedef std::unordered_map<std::string, std::string> StringMap;
 enum BikeSenseStates {
   IDLE,
   COLLECTING_DATA,
+  NO_GPS,
   UPLOADING_DATA,
   ERROR,
 };
