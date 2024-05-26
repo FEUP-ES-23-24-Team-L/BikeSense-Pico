@@ -392,7 +392,6 @@ void BikeSense::run() {
       }
 
       if (!gps_->isUpdated()) {
-        led_->setColor(0, led_->BYTE_MAX, led_->BYTE_MAX);
         break;
       }
 
