@@ -22,11 +22,11 @@
 #define STAPSK_DEFAULT "Bike123!"
 #endif
 
-#define LOCAL_TEST_MODE
+// #define LOCAL_TEST_MODE
 
 #ifndef LOCAL_TEST_MODE
 #define API_ENDPOINT "http://10.227.103.175:8080/api/v1"
-#define API_TOKEN "NotARealToken"
+#define API_TOKEN "NotARealToken" // Not implemented
 #endif
 
 #ifdef LOCAL_TEST_MODE
@@ -46,35 +46,6 @@ void loop() {
   uint ID_LEN = 2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 1;
   char id[ID_LEN];
   pico_get_unique_board_id_string(id, ID_LEN);
-
-  // digitalWrite(LED_BUILTIN, HIGH);
-  // SDCard sd = SDCard();
-  // if (!sd.setup()) {
-  //   digitalWrite(LED_BUILTIN, LOW);
-  //   while (true) {
-  //     Serial.println("Failed to setup SD card");
-  //     sleep_ms(1000);
-  //   }
-  // }
-  //
-  // while (true) {
-  //   auto files = sd.getBackUpFiles();
-  //   Serial.printf("Files: %d\n", files.size());
-  //   for (auto filename : files) {
-  //     Serial.printf("Trying to read file: %s\n", filename.c_str());
-  //     auto r = sd.retrieve(filename, 5);
-  //     if (r.has_value()) {
-  //       for (auto l : r.value()) {
-  //         Serial.printf("Line: %s\n", l.c_str());
-  //       }
-  //     } else {
-  //       Serial.println("Failed to read file");
-  //     }
-  //     Serial.println("Done reading file");
-  //   }
-  //   Serial.println("Done");
-  //   sleep_ms(1000);
-  // }
 
   BikeSenseBuilder()
       .addSensor(new NoiseSensor())
