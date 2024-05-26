@@ -229,11 +229,12 @@ bool BikeSense::uploadTrip(std::string filename, const int tripId,
       std::string errorMsg =
           "HTTP post failed after " + std::to_string(nBatches) + " batches";
       std::string httpError = http_.errorToString(httpCode).c_str();
-      std::string response = http_.getString().c_str();
+      const String response = http_.getString();
 
       dataStorage_->logError(errorMsg, gps_->timeString());
       dataStorage_->logError(httpError, gps_->timeString());
-      dataStorage_->logError(response, gps_->timeString());
+      if (response != nullptr)
+        dataStorage_->logError(response.c_str(), gps_->timeString());
 
       dataStorage_->backupFile(filename, tripId, nBatches);
 
